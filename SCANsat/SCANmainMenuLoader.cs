@@ -109,7 +109,7 @@ namespace SCANsat
 			}
 			if (assemblyList.Count > 0)
 			{
-				SCANsatVersion = assemblyList[0].infoVersion;
+				SCANsatVersion = assemblyList[0].assemblyLoaded.GetName().Version.ToString(2);
 				debugWriter();
 			}
 
