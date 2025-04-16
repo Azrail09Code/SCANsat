@@ -1269,7 +1269,12 @@ namespace SCANsat.SCAN_Unity
 
 		public string MapCenterText
 		{
-			get { return SCANuiUtil.toDMS(spotmap.CenteredLat, spotmap.CenteredLong); }
+			get
+			{
+				infoString.Clear();
+				SCANuiUtil.toDMS(infoString, spotmap.CenteredLat, spotmap.CenteredLong);
+				return infoString.ToString();
+			}
 		}
 
 		public string RandomWaypoint

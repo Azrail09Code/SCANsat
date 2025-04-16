@@ -415,34 +415,8 @@ namespace SCANsat.SCAN_UI.UI_Framework
 
 		/* UI: conversions to and from DMS */
 		/* FIXME: These do not belong here. And they are only used once! */
-		private static string toDMS(double thing, char neg, char pos, int prec)
-		{
-			StringBuilder sb = SCANStringBuilderCache.Acquire();
 
-			if (thing >= 0)
-			{
-				neg = pos;
-			}
-
-			thing = Math.Abs(thing);
-
-			sb.Append(Math.Floor(thing).ToString());
-			sb.Append(HOURS);
-			thing = (thing - Math.Floor(thing)) * 60;
-
-			sb.Append(Math.Floor(thing).ToString());
-			sb.Append(MINUTES);
-			thing = (thing - Math.Floor(thing)) * 60;
-
-			sb.Append(thing.ToString(string.Format("F{0}", prec.ToString())));
-			sb.Append(SECONDS);
-
-			sb.Append(neg);
-
-			return sb.SCANToStringAndRelease();
-		}
-
-		private static void toDMS(StringBuilder sb, double thing, char neg, char pos)
+		private static void toDMS(StringBuilder sb, double thing, char neg, char pos, string precFormat = "F2")
 		{
 			if (thing >= 0)
 			{
@@ -459,15 +433,10 @@ namespace SCANsat.SCAN_UI.UI_Framework
 			sb.Append(MINUTES);
 			thing = (thing - Math.Floor(thing)) * 60;
 
-			sb.Append(thing.ToString("F2"));
+			sb.Append(thing.ToString(precFormat));
 			sb.Append(SECONDS);
 
 			sb.Append(neg);
-		}
-
-		internal static string toDMS(double lat, double lon, int precision = 2)
-		{
-			return string.Format("{0} {1}", toDMS(lat, SOUTH, NORTH, precision), toDMS(lon, WEST, EAST, precision));
 		}
 
 		internal static void toDMS(StringBuilder sb, double lat, double lon)

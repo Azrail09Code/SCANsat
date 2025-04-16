@@ -1334,9 +1334,9 @@ namespace SCANsat
 				return latitude.ToString("F1") + "°, " + longitude.ToString("F1") + "°";
 			}
 
-			public string ToDMS()
+			public void ToDMS(StringBuilder sb)
 			{
-				return SCANuiUtil.toDMS(latitude, longitude, 0);
+				SCANuiUtil.toDMS(sb, latitude, longitude);
 			}
 		}
 

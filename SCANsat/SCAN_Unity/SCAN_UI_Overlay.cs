@@ -50,6 +50,7 @@ namespace SCANsat.SCAN_Unity
 		private volatile bool terrainGenerated;
 
 		private StringBuilder tooltipText = new StringBuilder();
+		private string tooltipString = string.Empty;
 		private bool tooltipActive;
 
 		private Texture2D mapOverlay;
@@ -193,7 +194,7 @@ namespace SCANsat.SCAN_Unity
 
 			tooltipText.Length = 0;
 
-			tooltipText.Append(coords.ToDMS());
+			coords.ToDMS(tooltipText);
 
 			if (body.pqsController != null)
 			{
@@ -239,6 +240,8 @@ namespace SCANsat.SCAN_Unity
 				tooltipText.AppendLine();
 				tooltipText.Append(SCANuiUtil.getResourceAbundance(body, coords.latitude, coords.longitude, fuzzy, currentResource));
 			}
+
+			tooltipString = tooltipText.ToString();
 		}
 
 		public void Open()
@@ -260,7 +263,7 @@ namespace SCANsat.SCAN_Unity
 
 			uiElement.SetOverlay(this);
 
-			tooltipText = SCANStringBuilderCache.Acquire();
+			tooltipString = string.Empty;
 
 			_isVisible = true;
 
@@ -307,7 +310,7 @@ namespace SCANsat.SCAN_Unity
 
 		public string TooltipText
 		{
-			get { return tooltipText.SCANToStringAndRelease(); }
+			get { return tooltipString; }
 		}
 
 		public bool IsVisible
