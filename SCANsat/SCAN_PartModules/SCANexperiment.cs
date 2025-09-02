@@ -131,7 +131,7 @@ namespace SCANsat.SCAN_PartModules
 			}
 		}
 
-		[KSPEvent(guiActive = true, guiName = "Analyze Data", active = true)]
+		[KSPEvent(guiActive = true, guiName = "Analyze Data", groupName = "scaninfo", active = true)]
 		public void analyze()
 		{
 			gatherScienceData();
@@ -153,7 +153,7 @@ namespace SCANsat.SCAN_PartModules
 			}
 		}
 
-		[KSPEvent(guiActive = true, guiName = "Review Data", active = false)]
+		[KSPEvent(guiActive = true, guiName = "Review Data", groupName = "scaninfo", active = false)]
 		public void reviewEvent()
 		{
 			ReviewData();

@@ -345,7 +345,7 @@ namespace SCANsat.SCAN_PartModules
 		}
 
 		/* SCAN: context (right click) buttons in FLIGHT */
-		[KSPEvent(guiActive = true, guiName = "Start RADAR Scan", active = true)]
+		[KSPEvent(guiActive = true, guiName = "Start RADAR Scan", groupName = "scaninfo", active = true)]
 		public void startScan()
 		{
 			if (!ToolbarManager.ToolbarAvailable && SCANcontroller.controller != null)
@@ -359,7 +359,7 @@ namespace SCANsat.SCAN_PartModules
 			animate(1, 0);
 		}
 
-		[KSPEvent(guiActive = true, guiName = "Stop RADAR Scan", active = true, requireFullControl = false)]
+		[KSPEvent(guiActive = true, guiName = "Stop RADAR Scan", groupName = "scaninfo", active = true, requireFullControl = false)]
 		public void stopScan()
 		{
 			unregisterScanner();
@@ -368,7 +368,7 @@ namespace SCANsat.SCAN_PartModules
 		}
 
 		/* SCAN: context (right click) buttons in EDTIOR */
-		[KSPEvent(guiActiveEditor = true, guiName = "Extend", active = true)]
+		[KSPEvent(guiActiveEditor = true, guiName = "Extend", groupName = "scaninfo", active = true)]
 		public void editorExtend()
 		{
 			Events["editorExtend"].active = false;
@@ -376,7 +376,7 @@ namespace SCANsat.SCAN_PartModules
 			animate(1, 0);
 		}
 
-		[KSPEvent(guiActiveEditor = true, guiName = "Retract", active = false)]
+		[KSPEvent(guiActiveEditor = true, guiName = "Retract", groupName = "scaninfo", active = false)]
 		public void editorRetract()
 		{
 			Events["editorExtend"].active = true;
