@@ -9,6 +9,6 @@
     <ReferenceKSPAssemblies>false</ReferenceKSPAssemblies>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="KSPBuildTools" Version="0.0.3-alpha.4" />
+    <PackageReference Include="KSPBuildTools" Version="0.0.4" />
   </ItemGroup>
 </Project>
