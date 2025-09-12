@@ -26,6 +26,7 @@ using SCANsat.SCAN_Data;
 using SCANsat.SCAN_UI.UI_Framework;
 using KSP.UI;
 using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
+using Log = KSPBuildTools.Log;
 
 namespace SCANsat.SCAN_Unity
 {
@@ -866,7 +867,7 @@ namespace SCANsat.SCAN_Unity
 
 			if (timer >= 1000)
 			{
-				Debug.LogError("[SCANsat] Something went wrong when drawing the SCANsat resource map overlay...");
+				Log.Error("Something went wrong when drawing the SCANsat resource map overlay...");
 				t.Abort();
 				threadRunning = false;
 				yield break;
@@ -874,7 +875,7 @@ namespace SCANsat.SCAN_Unity
 
 			if (!threadFinished)
 			{
-				Debug.LogError("[SCANsat] Something went wrong when drawing the SCANsat resource map overlay...");
+				Log.Error("Something went wrong when drawing the SCANsat resource map overlay...");
 				yield break;
 			}
 
@@ -960,7 +961,7 @@ namespace SCANsat.SCAN_Unity
 
 			if (timer >= 1000)
 			{
-				Debug.LogError("[SCANsat] Something went wrong when drawing the SCANsat terrain map overlay...");
+				Log.Error("Something went wrong when drawing the SCANsat terrain map overlay...");
 				t.Abort();
 				threadRunning = false;
 				yield break;
@@ -968,7 +969,7 @@ namespace SCANsat.SCAN_Unity
 
 			if (!threadFinished)
 			{
-				Debug.LogError("[SCANsat] Something went wrong when drawing the SCANsat terrain map overlay...");
+				Log.Error("Something went wrong when drawing the SCANsat terrain map overlay...");
 				yield break;
 			}
 

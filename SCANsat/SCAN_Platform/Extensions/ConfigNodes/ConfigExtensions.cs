@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Log = KSPBuildTools.Log;
 
 namespace SCANsat.SCAN_Platform.Extensions.ConfigNodes
 {
@@ -135,7 +136,7 @@ namespace SCANsat.SCAN_Platform.Extensions.ConfigNodes
 			}
 			catch (Exception e)
 			{
-				Debug.LogError("[SCANsat] Error while reading Color value; using default value...\n" + e);
+				Log.Error("Error while reading Color value; using default value...\n" + e);
 			}
 
 			return c;
@@ -156,7 +157,7 @@ namespace SCANsat.SCAN_Platform.Extensions.ConfigNodes
 			}
 			catch (Exception e)
 			{
-				Debug.LogError("[SCANsat] Error while reading Color32 value; using default value...\n" + e);
+				Log.Error("Error while reading Color32 value; using default value...\n" + e);
 			}
 
 			return c;
@@ -222,7 +223,7 @@ namespace SCANsat.SCAN_Platform.Extensions.ConfigNodes
 			}
 			catch (Exception e)
 			{
-				Debug.LogError("[SCANsat] Error while reading Guid value; creating new value...\n" + e);
+				Log.Error("Error while reading Guid value; creating new value...\n" + e);
 			}
 
 			return g;

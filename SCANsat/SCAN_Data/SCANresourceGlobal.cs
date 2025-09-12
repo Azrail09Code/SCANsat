@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 using SCANsat.SCAN_Platform;
+using Log = KSPBuildTools.Log;
 
 namespace SCANsat.SCAN_Data
 {
@@ -166,7 +167,7 @@ namespace SCANsat.SCAN_Data
 			}
 			else if (warn)
 			{
-				Debug.LogError(string.Format("[SCANsat] Warning: SCANresource Dictionary Already Contains Key Of This Type: [{0}] For Body: [{1}]", r.ResourceName, s));
+				Log.Error(string.Format("Warning: SCANresource Dictionary Already Contains Key Of This Type: [{0}] For Body: [{1}]", r.ResourceName, s));
 			}
 		}
 

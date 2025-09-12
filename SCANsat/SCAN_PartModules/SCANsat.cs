@@ -23,6 +23,7 @@ using KSP.Localization;
 
 using UnityEngine;
 using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
+using Log = KSPBuildTools.Log;
 
 namespace SCANsat.SCAN_PartModules
 {
@@ -100,7 +101,7 @@ namespace SCANsat.SCAN_PartModules
 		{
 			if (state == StartState.Editor)
 			{
-				print("[SCANsat] start: in editor");
+				Log.Message("start: in editor");
 				Events["editorExtend"].active = !string.IsNullOrEmpty(animationName);
 				scanInfoAltitude.guiActive = false;
 				scanInfoStatus.guiActive = false;
@@ -114,7 +115,7 @@ namespace SCANsat.SCAN_PartModules
 				scanType = getTypeString();
 				scanAltitude = getAltString();
 				scanPower = getECString();
-				print("[SCANsat] start: live");
+				Log.Message("start: live");
 				GameEvents.onVesselSOIChanged.Add(ChangeSOI);
 			}
 			if (!string.IsNullOrEmpty(animationName))
@@ -122,11 +123,11 @@ namespace SCANsat.SCAN_PartModules
 				Animation[] a = part.FindModelAnimators(animationName);
 				if (a.Length == 0)
 				{
-					print("[SCANsat] animation '" + animationName + "' not found");
+					Log.Message("animation '" + animationName + "' not found");
 				}
 				else
 				{
-					print("[SCANsat] using animation #1 out of " + a.Length.ToString() + " animations named '" + animationName + "'");
+					Log.Message("using animation #1 out of " + a.Length.ToString() + " animations named '" + animationName + "'");
 					anim = a[0];
 					anim.playAutomatically = false;
 					anim.cullingType = AnimationCullingType.BasedOnRenderers;
@@ -161,7 +162,7 @@ namespace SCANsat.SCAN_PartModules
 			}
 
 			powerIsProblem = false;
-			print("[SCANsat] sensorType: " + sensorType.ToString() + " fov: " + fov.ToString() + " min_alt: " + min_alt.ToString() + " max_alt: " + max_alt.ToString() + " best_alt: " + best_alt.ToString());
+			Log.Message("sensorType: " + sensorType.ToString() + " fov: " + fov.ToString() + " min_alt: " + min_alt.ToString() + " max_alt: " + max_alt.ToString() + " best_alt: " + best_alt.ToString());
 		}
 
 		private void OnDestroy()

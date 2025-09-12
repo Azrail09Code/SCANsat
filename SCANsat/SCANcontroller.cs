@@ -32,6 +32,7 @@ using SCANsat.SCAN_Toolbar;
 using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
 using FinePrint.Contracts.Parameters;
 using UnityEngine.Profiling;
+using Log = KSPBuildTools.Log;
 
 namespace SCANsat
 {
@@ -230,7 +231,7 @@ namespace SCANsat
 			}
 			else
 			{
-				UnityEngine.Debug.LogError("[SCANsat] Warning: SCANdata Dictionary Already Contains Key of This Type");
+				Log.Error("Warning: SCANdata Dictionary Already Contains Key of This Type");
 			}
 		}
 
@@ -364,7 +365,7 @@ namespace SCANsat
 			}
 			else
 			{
-				UnityEngine.Debug.LogError("[SCANsat] Warning: SCANterrain Data Dictionary Already Contains Key Of This Type");
+				Log.Error("SCANterrain Data Dictionary Already Contains Key Of This Type");
 			}
 		}
 
@@ -494,7 +495,7 @@ namespace SCANsat
 			}
 			else
 			{
-				UnityEngine.Debug.LogError(string.Format("[SCANsat] Warning: SCANResource Dictionary Already Contains Key of This Type: Resource: {0}", name));
+				Log.Error(string.Format("SCANResource Dictionary Already Contains Key of This Type: Resource: {0}", name));
 			}
 		}
 
@@ -506,7 +507,7 @@ namespace SCANsat
 			}
 			else if (warn)
 			{
-				UnityEngine.Debug.LogError(string.Format("[SCANsat] Warning: Loaded Resource List Already Contains Resource Of Name: {0}", name));
+				Log.Error(string.Format("Loaded Resource List Already Contains Resource Of Name: {0}", name));
 			}
 		}
 
@@ -659,7 +660,7 @@ namespace SCANsat
 					}
 					catch (Exception e)
 					{
-						UnityEngine.Debug.LogError(string.Format("[SCANsat] Error in loading Celestial Body [{0}]...\n{1}", body_name, e));
+						Log.Error(string.Format("Error in loading Celestial Body [{0}]...\n{1}", body_name, e));
 						continue;
 					}
 
@@ -2281,7 +2282,7 @@ namespace SCANsat
 						}
 						catch (Exception e)
 						{
-							UnityEngine.Debug.LogError("[SCANsat] Error in loading Celestial Body...\n" + e);
+							Log.Error("Error in loading Celestial Body...\n" + e);
 							return;
 						}
 
@@ -2506,7 +2507,7 @@ namespace SCANsat
 			}
 			catch (Exception e)
 			{
-				UnityEngine.Debug.LogError("[SCANsat] Something went wrong while trying to load this SCANsat vessel; moving on the next vessel... \n" + e);
+				Log.Error("Something went wrong while trying to load this SCANsat vessel; moving on the next vessel... \n" + e);
 			}
 
 			if (sv.vessel == null)
@@ -2543,7 +2544,7 @@ namespace SCANsat
 			}
 			catch (Exception e)
 			{
-				UnityEngine.Debug.LogError("[SCANsat] Something went wrong while trying to load this SCANsat vessel; moving on the next vessel... \n" + e);
+				Log.Error("Something went wrong while trying to load this SCANsat vessel; moving on the next vessel... \n" + e);
 			}
 			if (sv.vessel == null)
 			{

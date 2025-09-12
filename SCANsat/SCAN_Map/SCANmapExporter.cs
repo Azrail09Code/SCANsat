@@ -5,6 +5,7 @@ using System.Threading;
 using UnityEngine;
 using SCANsat.SCAN_Data;
 using SCANsat.SCAN_Platform;
+using Log = KSPBuildTools.Log;
 
 namespace SCANsat.SCAN_Map
 {
@@ -115,7 +116,7 @@ namespace SCANsat.SCAN_Map
 
 			if (timer >= 20000)
 			{
-				Debug.LogError("[SCANsat] Something went wrong while exporting .csv data file\nCanceling export thread...");
+				Log.Error("Something went wrong while exporting .csv data file\nCanceling export thread...");
 				t.Abort();
 				threadRunning = false;
 				yield break;
@@ -123,7 +124,7 @@ namespace SCANsat.SCAN_Map
 
 			if (!threadFinished)
 			{
-				Debug.LogError("[SCANsat] Something went wrong while exporting .csv data file\nExport thread has been interrupted...");
+				Log.Error("Something went wrong while exporting .csv data file\nExport thread has been interrupted...");
 				yield break;
 			}
 		}

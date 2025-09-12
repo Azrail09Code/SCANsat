@@ -17,6 +17,7 @@ using System.Reflection;
 using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
+using Log = KSPBuildTools.Log;
 
 namespace SCANsat
 {
@@ -127,7 +128,7 @@ namespace SCANsat
 		{
 			foreach (AssemblyLog log in assemblyList)
 			{
-				print(string.Format("[SCANsat] Assembly: {0} found; Version: {1}; File Version: {2}; Info Version: {3}; Location: {4}", log.name, log.version, log.fileVersion, log.infoVersion, log.location));
+				Log.Message(string.Format("Assembly: {0} found; Version: {1}; File Version: {2}; Info Version: {3}; Location: {4}", log.name, log.version, log.fileVersion, log.infoVersion, log.location));
 			}
 		}
 

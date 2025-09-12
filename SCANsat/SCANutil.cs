@@ -1342,15 +1342,13 @@ namespace SCANsat
 
 		internal static void SCANlog(string log, params object[] stringObjects)
 		{
-			log = string.Format(log, stringObjects);
-			string finalLog = string.Format("[SCANsat] {0}", log);
-			Debug.Log(finalLog);
+			KSPBuildTools.Log.Message(string.Format(log, stringObjects));
 		}
 
 		[System.Diagnostics.Conditional("DEBUG")]
 		internal static void SCANdebugLog(string log, params object[] stringObjects)
 		{
-			SCANlog(log, stringObjects);
+			KSPBuildTools.Log.Debug(string.Format(log, stringObjects));
 		}
 
 		#endregion

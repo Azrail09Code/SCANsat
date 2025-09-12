@@ -26,6 +26,7 @@ using SCANsat.SCAN_Platform;
 using SCANsat.SCAN_Palettes;
 using SCANsat.SCAN_Unity;
 using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
+using Log = KSPBuildTools.Log;
 
 namespace SCANsat.SCAN_Data
 {
@@ -861,7 +862,7 @@ namespace SCANsat.SCAN_Data
 				}
 				catch (Exception e)
 				{
-					Debug.LogError("[SCANsat] Error In Detecting Terrain Height Map; Stopping Height Map Generator\n" + e);
+					Log.Error("Error In Detecting Terrain Height Map; Stopping Height Map Generator\n" + e);
 					built = true;
 					mapBuilding = false;
 					overlayBuilding = false;
