@@ -28,8 +28,6 @@ namespace SCANsat
 		private string[] Assemblies = new string[9] { "SCANsatKethane", "RasterPropMonitor", "MechJeb2", "ContractConfigurator", "CC_SCANsat", "SCANmechjeb", "ModuleManager", "Kopernicus", "Kopernicus.OnDemand" };
 
 		internal static string SCANsatVersion = "";
-		internal static bool FinePrintFlightBand = false;
-		internal static bool FinePrintStationaryWaypoint = false;
 		public static bool MechJebLoaded = false;
 		public static bool MMLoaded = false;
 		public static bool KopernicusLoaded = false;
@@ -63,8 +61,7 @@ namespace SCANsat
 			}
 
 			findAssemblies(Assemblies);
-			FinePrintStationaryWaypoint = SCANfinePrint.FinePrintStationaryWaypointReflection();
-			FinePrintFlightBand = SCANfinePrint.FinePrintFlightBandReflection();
+			SCANfinePrint.Initialize();
 			SCANconfigLoader.configLoader();
 		}
 

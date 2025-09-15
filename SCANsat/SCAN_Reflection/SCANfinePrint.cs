@@ -9,6 +9,9 @@ namespace SCANsat.SCAN_Reflection
 {
 	static class SCANfinePrint
 	{
+		internal static bool FinePrintFlightBand = false;
+		internal static bool FinePrintStationaryWaypoint = false;
+
 		private static bool FinePrintFlightBandRun = false;
 		private static bool FinePrintStationaryWaypointRun = false;
 
@@ -31,6 +34,12 @@ namespace SCANsat.SCAN_Reflection
 			return w;
 		}
 
+		internal static void Initialize()
+		{
+			FinePrintStationaryWaypoint = FinePrintStationaryWaypointReflection();
+			FinePrintFlightBand = FinePrintFlightBandReflection();
+		}
+
 		internal static FlightBand FinePrintFlightBandValue(SurveyWaypointParameter p)
 		{
 			FlightBand b = FlightBand.NONE;
@@ -46,7 +55,7 @@ namespace SCANsat.SCAN_Reflection
 			return b;
 		}
 
-		internal static bool FinePrintStationaryWaypointReflection()
+		private static bool FinePrintStationaryWaypointReflection()
 		{
 			if (_FinePrintStationaryWaypoint != null)
 			{
@@ -86,7 +95,7 @@ namespace SCANsat.SCAN_Reflection
 			return false;
 		}
 
-		internal static bool FinePrintFlightBandReflection()
+		private static bool FinePrintFlightBandReflection()
 		{
 			if (_FinePrintFlightBand != null)
 			{
