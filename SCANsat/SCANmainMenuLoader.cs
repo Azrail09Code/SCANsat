@@ -30,7 +30,6 @@ namespace SCANsat
 		internal static string SCANsatVersion = "";
 		public static bool MechJebLoaded = false;
 		public static bool MMLoaded = false;
-		public static bool KopernicusLoaded = false;
 
 		private static Texture2D orbitIconsMap;
 
@@ -101,8 +100,7 @@ namespace SCANsat
 					}
 					else if (alog.name == "Kopernicus")
 					{
-						KopernicusLoaded = true;
-						//SCANreflection.LoadKopernicusReflection();
+						SCANkopernicus.Initialize(assembly);
 					}
 				}
 			}

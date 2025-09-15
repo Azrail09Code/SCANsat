@@ -1242,7 +1242,7 @@ namespace SCANsat
 
 		internal void loadPQS(CelestialBody b, mapSource s = mapSource.Data)
 		{
-			if (!SCANmainMenuLoader.KopernicusLoaded)
+			if (!SCANkopernicus.KopernicusLoaded)
 			{
 				return;
 			}
@@ -1316,23 +1316,12 @@ namespace SCANsat
 					return;
 			}
 
-			PQSMod KopernicusOnDemand = b.GetComponentsInChildren<PQSMod>(true).Where(p => p.GetType().Name == "PQSMod_OnDemandHandler").FirstOrDefault();
-
-			if (KopernicusOnDemand == null)
-			{
-				return;
-			}
-
-			KopernicusOnDemand.OnQuadPreBuild(null);
-
-			KopernicusOnDemand = null;
-
-			SCANUtil.SCANlog("Loading Kopernicus On Demand PQSMod For {0}", b.bodyName);
+			SCANkopernicus.LoadPQS(b);
 		}
 
 		internal void unloadPQS(CelestialBody b, mapSource s = mapSource.Data)
 		{
-			if (!SCANmainMenuLoader.KopernicusLoaded)
+			if (!SCANkopernicus.KopernicusLoaded)
 			{
 				return;
 			}
@@ -1422,27 +1411,11 @@ namespace SCANsat
 				return;
 			}
 
-			PQSMod KopernicusOnDemand = b.GetComponentsInChildren<PQSMod>(true).Where(p => p.GetType().Name == "PQSMod_OnDemandHandler").FirstOrDefault();
-
-			if (KopernicusOnDemand == null)
-			{
-				return;
-			}
-
-			KopernicusOnDemand.OnSphereInactive();
-
-			KopernicusOnDemand = null;
-
-			SCANUtil.SCANlog("Unloading Kopernicus On Demand PQSMod For {0}", b.bodyName);
+			SCANkopernicus.UnloadPQS(b);
 		}
 
 		internal void loadOnDemandScaledSpace(CelestialBody b, mapSource s)
 		{
-			if (!SCANmainMenuLoader.KopernicusLoaded)
-			{
-				return;
-			}
-
 			if (!SCAN_Settings_Config.Instance.VisibleMapsActive)
 			{
 				return;
@@ -1490,23 +1463,12 @@ namespace SCANsat
 					break;
 			}
 
-			MonoBehaviour kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANkopernicus.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
-
-			if (kopernicusScaledSpaceLoader == null)
-			{
-				return;
-			}
-
-			SCANkopernicus.LoadOnDemand(kopernicusScaledSpaceLoader);
-
-			kopernicusScaledSpaceLoader = null;
-
-			SCANUtil.SCANlog("Loading Kopernicus On Demand Scaled Space Map For {0}", b.bodyName);
+			SCANkopernicus.LoadOnDemand(b);
 		}
 
 		internal void unloadOnDemandScaledSpace(CelestialBody b, mapSource s)
 		{
-			if (!SCANmainMenuLoader.KopernicusLoaded)
+			if (!SCANkopernicus.KopernicusLoaded)
 			{
 				return;
 			}
@@ -1568,18 +1530,7 @@ namespace SCANsat
 				return;
 			}
 
-			MonoBehaviour kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANkopernicus.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
-
-			if (kopernicusScaledSpaceLoader == null)
-			{
-				return;
-			}
-
-			SCANkopernicus.UnloadOnDemand(kopernicusScaledSpaceLoader);
-
-			kopernicusScaledSpaceLoader = null;
-
-			SCANUtil.SCANlog("Unloading Kopernicus On Demand Scaled Space Map For {0}", b.bodyName);
+			SCANkopernicus.UnloadOnDemand(b);
 		}
 
 		private bool InCurrentBodyFamily(CelestialBody b)
