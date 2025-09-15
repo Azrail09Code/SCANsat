@@ -150,8 +150,6 @@ namespace SCANsat
 		private List<CelestialBody> dataBodies = new List<CelestialBody>();
 		private CelestialBody bigMapBodyPQS;
 		private CelestialBody zoomMapBodyPQS;
-		private PQSMod KopernicusOnDemand;
-		private MonoBehaviour kopernicusScaledSpaceLoader;
 		private CelestialBody bigMapBodyVisual;
 		private CelestialBody zoomMapBodyVisual;
 
@@ -1318,7 +1316,7 @@ namespace SCANsat
 					return;
 			}
 
-			KopernicusOnDemand = b.GetComponentsInChildren<PQSMod>(true).Where(p => p.GetType().Name == "PQSMod_OnDemandHandler").FirstOrDefault();
+			PQSMod KopernicusOnDemand = b.GetComponentsInChildren<PQSMod>(true).Where(p => p.GetType().Name == "PQSMod_OnDemandHandler").FirstOrDefault();
 
 			if (KopernicusOnDemand == null)
 			{
@@ -1424,7 +1422,7 @@ namespace SCANsat
 				return;
 			}
 
-			KopernicusOnDemand = b.GetComponentsInChildren<PQSMod>(true).Where(p => p.GetType().Name == "PQSMod_OnDemandHandler").FirstOrDefault();
+			PQSMod KopernicusOnDemand = b.GetComponentsInChildren<PQSMod>(true).Where(p => p.GetType().Name == "PQSMod_OnDemandHandler").FirstOrDefault();
 
 			if (KopernicusOnDemand == null)
 			{
@@ -1492,7 +1490,7 @@ namespace SCANsat
 					break;
 			}
 
-			kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANkopernicus.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
+			MonoBehaviour kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANkopernicus.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
 
 			if (kopernicusScaledSpaceLoader == null)
 			{
@@ -1570,7 +1568,7 @@ namespace SCANsat
 				return;
 			}
 
-			kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANkopernicus.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
+			MonoBehaviour kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANkopernicus.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
 
 			if (kopernicusScaledSpaceLoader == null)
 			{
