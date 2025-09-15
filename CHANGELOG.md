@@ -9,7 +9,13 @@
 - Fixed missing vessel icons and visual map mode in RPM MFDs (thanks @vulkans22)
 - Fixed NRE when loading a sandbox game
 - Fixed NRE when loading a vessel with a running narrow band scanner
-
+- Fixed maps appearing too bright when Parallax Continued is installed
+- Fixed a memory leak in the applauncher
+- Added stock inventory and EVA construction support
+- Add CommunityCateogryKit support (thanks @pkmniako for the icon)
+- Fix tooltip bug when ContractConfigurator is installed (thanks @abel1502 for pinpointing the issue)
+- Remove "enhanced for ground activity" from orbital scanners
+- Moved all start/stop event buttons into the PAW group
 
 ## 20.4 - 2020-9-9
 
