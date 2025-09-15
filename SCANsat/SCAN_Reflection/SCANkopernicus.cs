@@ -31,15 +31,13 @@ namespace SCANsat.SCAN_Reflection
 
 		internal static void Initialize(AssemblyLoader.LoadedAssembly kopernicusAssembly)
 		{
-			KopernicusLoaded = true;
-
 			try
 			{
-				x_ScaledSpaceOnDemand_Type = kopernicusAssembly.assembly.GetType("ScaledSpaceOnDemand");
+				x_ScaledSpaceOnDemand_Type = kopernicusAssembly.assembly.GetType("Kopernicus.OnDemand.ScaledSpaceOnDemand");
 				x_ScaledSpaceOnDemand_LoadTextures = x_ScaledSpaceOnDemand_Type.GetMethod("LoadTextures", BindingFlags.Instance | BindingFlags.Public);
 				x_ScaledSpaceOnDemand_UnloadTextures = x_ScaledSpaceOnDemand_Type.GetMethod("UnloadTextures", BindingFlags.Instance | BindingFlags.Public);
 
-				x_PQSMod_OnDemandHandler_Type = kopernicusAssembly.assembly.GetType("PQSMod_OnDemandHandler");
+				x_PQSMod_OnDemandHandler_Type = kopernicusAssembly.assembly.GetType("Kopernicus.OnDemand.PQSMod_OnDemandHandler");
 			}
 			catch(Exception e)
 			{
@@ -49,7 +47,10 @@ namespace SCANsat.SCAN_Reflection
 			if (x_ScaledSpaceOnDemand_Type == null || x_ScaledSpaceOnDemand_LoadTextures == null || x_ScaledSpaceOnDemand_UnloadTextures == null || x_PQSMod_OnDemandHandler_Type == null)
 			{
 				Log.Error("SCANsat: Unable to reflect Kopernicus OnDemand methods");
-				KopernicusLoaded = false;
+			}
+			else
+			{
+				KopernicusLoaded = true;
 			}
 		}
 
