@@ -18,6 +18,7 @@ using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
 using Log = KSPBuildTools.Log;
+using SCANsat.SCAN_Reflection;
 
 namespace SCANsat
 {
@@ -62,8 +63,8 @@ namespace SCANsat
 			}
 
 			findAssemblies(Assemblies);
-			FinePrintStationaryWaypoint = SCANreflection.FinePrintStationaryWaypointReflection();
-			FinePrintFlightBand = SCANreflection.FinePrintFlightBandReflection();
+			FinePrintStationaryWaypoint = SCANfinePrint.FinePrintStationaryWaypointReflection();
+			FinePrintFlightBand = SCANfinePrint.FinePrintFlightBandReflection();
 			SCANconfigLoader.configLoader();
 		}
 

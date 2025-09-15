@@ -16,6 +16,7 @@ using FinePrint.Contracts.Parameters;
 using FinePrint;
 using FinePrint.Utilities;
 using UnityEngine;
+using SCANsat.SCAN_Reflection;
 
 namespace SCANsat.SCAN_Data
 {
@@ -141,7 +142,7 @@ namespace SCANsat.SCAN_Data
 		{
 			if (SCANmainMenuLoader.FinePrintStationaryWaypoint)
 			{
-				return SCANreflection.FinePrintStationaryWaypointObject(p);
+				return SCANfinePrint.FinePrintStationaryWaypointObject(p);
 			}
 
 			return null;
@@ -151,7 +152,7 @@ namespace SCANsat.SCAN_Data
 		{
 			if (SCANmainMenuLoader.FinePrintFlightBand)
 			{
-				return SCANreflection.FinePrintFlightBandValue(p);
+				return SCANfinePrint.FinePrintFlightBandValue(p);
 			}
 
 			return FlightBand.NONE;

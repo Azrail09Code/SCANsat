@@ -33,6 +33,7 @@ using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
 using FinePrint.Contracts.Parameters;
 using UnityEngine.Profiling;
 using Log = KSPBuildTools.Log;
+using SCANsat.SCAN_Reflection;
 
 namespace SCANsat
 {
@@ -1491,14 +1492,14 @@ namespace SCANsat
 					break;
 			}
 
-			kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANreflection.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
+			kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANkopernicus.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
 
 			if (kopernicusScaledSpaceLoader == null)
 			{
 				return;
 			}
 
-			SCANreflection.LoadOnDemand(kopernicusScaledSpaceLoader);
+			SCANkopernicus.LoadOnDemand(kopernicusScaledSpaceLoader);
 
 			kopernicusScaledSpaceLoader = null;
 
@@ -1569,14 +1570,14 @@ namespace SCANsat
 				return;
 			}
 
-			kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANreflection.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
+			kopernicusScaledSpaceLoader = b.scaledBody.GetComponents<MonoBehaviour>().Where(p => p.GetType().Name == SCANkopernicus.KOPERNICUSONDEMANDTYPE).FirstOrDefault();
 
 			if (kopernicusScaledSpaceLoader == null)
 			{
 				return;
 			}
 
-			SCANreflection.UnloadOnDemand(kopernicusScaledSpaceLoader);
+			SCANkopernicus.UnloadOnDemand(kopernicusScaledSpaceLoader);
 
 			kopernicusScaledSpaceLoader = null;
 
