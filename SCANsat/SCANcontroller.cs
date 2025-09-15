@@ -1594,17 +1594,17 @@ namespace SCANsat
 			return false;
 		}
 
+		// Can't remove this or parallax's patches break
 		internal void LoadVisualMapTexture(CelestialBody b, mapSource s)
 		{
-			if (!SCAN_Settings_Config.Instance.VisibleMapsActive)
-			{
-				return;
-			}
 
-			if (b == null)
-			{
-				return;
-			}
+		}
+
+		void GetVisualMapTexturesForBody(CelestialBody b, out Material material, out string colorMapTextureName, out string normalMapTextureName)
+		{
+			material = null;
+			colorMapTextureName = null;
+			normalMapTextureName = null;
 
 			if (b.scaledBody == null)
 			{
@@ -1618,53 +1618,78 @@ namespace SCANsat
 				return;
 			}
 
-			if (!readableScaledSpaceMaps.ContainsKey(b) || readableScaledSpaceMaps[b] == null)
+			material = scaledMesh.sharedMaterial; // TODO: what if there are multiple materials?  do we need to check all of them?
+			string shaderName = material.shader.name;
+
+			if (shaderName == "Terrain/Gas Giant")
 			{
-				if (scaledMesh.sharedMaterial.shader.name == "Terrain/Gas Giant")
-				{
-					if (scaledMesh.sharedMaterial.HasProperty("_DetailCloudPatternTexture"))
-					{
-						readableScaledSpaceMaps.Add(b, readableTexture(scaledMesh.sharedMaterial.GetTexture("_DetailCloudPatternTexture"), scaledMesh.sharedMaterial, true));
-					}
-				}
-				//else if (scaledMesh.sharedMaterial.shader.name == "Emissive Multi Ramp Sunspots")
-				//{
-				//    if (scaledMesh.sharedMaterial.HasProperty("_MainTex"))
-				//        readableScaledSpaceMaps.Add(b, readableTexture(scaledMesh.sharedMaterial.GetTexture("_MainTex"), scaledMesh.sharedMaterial, true));
-				//}
-				else
-				{
-					if (scaledMesh.sharedMaterial.HasProperty("_MainTex"))
-					{
-						readableScaledSpaceMaps.Add(b, readableTexture(scaledMesh.sharedMaterial.GetTexture("_MainTex"), scaledMesh.sharedMaterial, true));
-					}
-					else if (scaledMesh.sharedMaterial.HasProperty("_ColorMap"))
-					{
-						readableScaledSpaceMaps.Add(b, readableTexture(scaledMesh.sharedMaterial.GetTexture("_ColorMap"), scaledMesh.sharedMaterial, true));
-					}
-				}
+				colorMapTextureName = "_DetailCloudPatternTexture";
+				normalMapTextureName = "_NormalMap";
+				return;
+			}
+			else if (shaderName.Contains("ParallaxScaled"))
+			{
+				SCANparallaxContinued.LoadParallax(b, ref material);
+				colorMapTextureName = "_ColorMap";
+			}
+			else if (material.HasProperty("_MainTex"))
+			{
+				colorMapTextureName = "_MainTex";
+			}
+			else if (material.HasProperty("_ColorMap"))
+			{
+				colorMapTextureName = "_ColorMap";
 			}
 
-			if (!readableScaledSpaceNormalMaps.ContainsKey(b) || readableScaledSpaceNormalMaps[b] == null)
+			if (material.HasProperty("_BumpMap"))
 			{
-				if (scaledMesh.sharedMaterial.shader.name == "Terrain/Gas Giant")
+				normalMapTextureName = "_BumpMap";
+			}
+			else if (material.HasProperty("_NormalMap"))
+			{
+				normalMapTextureName = "_NormalMap";
+			}
+		}
+
+		void CacheScaledSpaceTexture(Dictionary<CelestialBody, Texture2D> cache, CelestialBody b, Material material, string textureName, bool useMaterial)
+		{
+			if (cache.GetValueOrDefault(b) == null && textureName != null)
+			{
+				var sourceTexture = material.GetTexture(textureName) as Texture2D;
+				if (sourceTexture == null)
 				{
-					if (scaledMesh.sharedMaterial.HasProperty("_NormalMap"))
-					{
-						readableScaledSpaceNormalMaps.Add(b, readableTexture(scaledMesh.sharedMaterial.GetTexture("_NormalMap"), scaledMesh.sharedMaterial, false));
-					}
+					Log.Error($"GetTexture returned a null texture for body {b.name}, material {material.name} and texture name {textureName}");
 				}
 				else
 				{
-					if (scaledMesh.sharedMaterial.HasProperty("_BumpMap"))
-					{
-						readableScaledSpaceNormalMaps.Add(b, readableTexture(scaledMesh.sharedMaterial.GetTexture("_BumpMap"), scaledMesh.sharedMaterial, false));
-					}
-					else if (scaledMesh.sharedMaterial.HasProperty("_NormalMap"))
-					{
-						readableScaledSpaceNormalMaps.Add(b, readableTexture(scaledMesh.sharedMaterial.GetTexture("_NormalMap"), scaledMesh.sharedMaterial, false));
-					}
+					var colorMap = sourceTexture.isReadable ? sourceTexture : readableTexture(sourceTexture, material, true);
+					cache.Add(b, colorMap);
 				}
+			}
+		}
+
+		internal void LoadVisualMapTexture_Renamed(CelestialBody b, mapSource s)
+		{
+			if (!SCAN_Settings_Config.Instance.VisibleMapsActive)
+			{
+				return;
+			}
+
+			if (b == null)
+			{
+				return;
+			}
+
+			GetVisualMapTexturesForBody(b, out Material material, out string colorMapTextureName, out string normalMapTextureName);
+
+			if (material == null)
+			{
+				Log.Error($"GetVisualMapTexturesForBody returned a null material for body {b.name}");
+			}
+			else
+			{
+				CacheScaledSpaceTexture(readableScaledSpaceMaps, b, material, colorMapTextureName, true);
+				CacheScaledSpaceTexture(readableScaledSpaceNormalMaps, b, material, normalMapTextureName, false);
 			}
 
 			switch (s)

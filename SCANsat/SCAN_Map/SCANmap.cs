@@ -639,12 +639,12 @@ namespace SCANsat.SCAN_Map
 				SCANcontroller.controller.UnloadVisualMapTexture(body, mSource);
 				body = b;
 				SCANcontroller.controller.loadOnDemandScaledSpace(body, mSource);
-				SCANcontroller.controller.LoadVisualMapTexture(body, mSource);
+				SCANcontroller.controller.LoadVisualMapTexture_Renamed(body, mSource);
 			}
 			else
 			{
 				SCANcontroller.controller.loadOnDemandScaledSpace(body, mSource);
-				SCANcontroller.controller.LoadVisualMapTexture(body, mSource);
+				SCANcontroller.controller.LoadVisualMapTexture_Renamed(body, mSource);
 			}
 
 			data = SCANUtil.getData(body);
