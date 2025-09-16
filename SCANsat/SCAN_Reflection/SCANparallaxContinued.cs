@@ -57,6 +57,7 @@ namespace SCANsat.SCAN_Reflection
 
 				if (parallaxBody != null)
 				{
+					Log.Message($"Loading Parallax Continued data for {body.name}");
 					x_ParallaxScaledBody_Load.Invoke(parallaxBody, null);
 					material = x_ParallaxScaledBody_scaledMaterial.GetValue(parallaxBody) as Material;
 				}
