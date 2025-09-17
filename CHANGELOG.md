@@ -1,6 +1,6 @@
 # SCANsat Changelog
 
-## 21.0 - 2025-09-15
+## Unreleased
 
 - Added Chinese localization (thanks @AmazingWood)
 - Fixed usages of .material in favor of .sharedMaterial (thanks @Gameslinx)

@@ -60,9 +60,28 @@ namespace SCANsat.SCAN_Reflection
 					Log.Message($"Loading Parallax Continued data for {body.name}");
 					x_ParallaxScaledBody_Load.Invoke(parallaxBody, null);
 					material = x_ParallaxScaledBody_scaledMaterial.GetValue(parallaxBody) as Material;
+
+#if DEBUG
+					for (int propertyIndex = 0; propertyIndex < material.shader.GetPropertyCount(); ++propertyIndex)
+					{
+						var propertyType = material.shader.GetPropertyType(propertyIndex);
+						var propertyName = material.shader.GetPropertyName(propertyIndex);
+						object propertyValue = null;
+
+						switch (propertyType)
+						{
+							case UnityEngine.Rendering.ShaderPropertyType.Color: propertyValue = material.GetColor(propertyName); break;
+							case UnityEngine.Rendering.ShaderPropertyType.Vector: propertyValue = material.GetVector(propertyName); break;
+							case UnityEngine.Rendering.ShaderPropertyType.Float: propertyValue = material.GetFloat(propertyName); break;
+							case UnityEngine.Rendering.ShaderPropertyType.Range: propertyValue = material.GetFloat(propertyName); break;
+							case UnityEngine.Rendering.ShaderPropertyType.Texture: propertyValue = material.GetTexture(propertyName); break;
+						}
+
+						Log.Debug($"Property {propertyIndex} is {propertyType} named {propertyName} with value {propertyValue}");
+					}
+#endif
 				}
 			}
-
 		}
 	}
 }

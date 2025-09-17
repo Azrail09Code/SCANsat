@@ -1600,11 +1600,12 @@ namespace SCANsat
 
 		}
 
-		void GetVisualMapTexturesForBody(CelestialBody b, out Material material, out string colorMapTextureName, out string normalMapTextureName)
+		void GetVisualMapTexturesForBody(CelestialBody b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName, out string normalMapTextureName)
 		{
 			material = null;
 			colorMapTextureName = null;
 			normalMapTextureName = null;
+			useMaterialForColorMap = true;
 
 			if (b.scaledBody == null)
 			{
@@ -1630,7 +1631,10 @@ namespace SCANsat
 			else if (shaderName.Contains("ParallaxScaled"))
 			{
 				SCANparallaxContinued.LoadParallax(b, ref material);
+				useMaterialForColorMap = false;
 				colorMapTextureName = "_ColorMap";
+				normalMapTextureName = null; // for whatever reason, the logic in ScANmap that uses the normal map doesn't work with parallax's normal maps
+				return;
 			}
 			else if (material.HasProperty("_MainTex"))
 			{
@@ -1662,7 +1666,7 @@ namespace SCANsat
 				}
 				else
 				{
-					var colorMap = sourceTexture.isReadable ? sourceTexture : readableTexture(sourceTexture, material, true);
+					var colorMap = sourceTexture.isReadable ? sourceTexture : readableTexture(sourceTexture, useMaterial ? material : null);
 					cache.Add(b, colorMap);
 				}
 			}
@@ -1680,7 +1684,7 @@ namespace SCANsat
 				return;
 			}
 
-			GetVisualMapTexturesForBody(b, out Material material, out string colorMapTextureName, out string normalMapTextureName);
+			GetVisualMapTexturesForBody(b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName, out string normalMapTextureName);
 
 			if (material == null)
 			{
@@ -1688,7 +1692,7 @@ namespace SCANsat
 			}
 			else
 			{
-				CacheScaledSpaceTexture(readableScaledSpaceMaps, b, material, colorMapTextureName, true);
+				CacheScaledSpaceTexture(readableScaledSpaceMaps, b, material, colorMapTextureName, useMaterialForColorMap);
 				CacheScaledSpaceTexture(readableScaledSpaceNormalMaps, b, material, normalMapTextureName, false);
 			}
 
@@ -1752,7 +1756,7 @@ namespace SCANsat
 			}
 		}
 
-		private Texture2D readableTexture(Texture tex, Material mat, bool useMat)
+		private Texture2D readableTexture(Texture tex, Material mat)
 		{
 			if (tex == null)
 			{
@@ -1763,7 +1767,7 @@ namespace SCANsat
 
 			var rt = RenderTexture.GetTemporary(tex.width, tex.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB, 1);
 
-			if (useMat)
+			if (mat != null)
 			{
 				Graphics.Blit(tex, rt, mat);
 			}
