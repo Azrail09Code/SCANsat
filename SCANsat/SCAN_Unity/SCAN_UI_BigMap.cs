@@ -140,6 +140,8 @@ namespace SCANsat.SCAN_Unity
 			Open();
 		}
 
+		bool vesselChanged = false;
+
 		private void vesselChange(Vessel V)
 		{
 			vessel = FlightGlobals.ActiveVessel;
@@ -149,7 +151,7 @@ namespace SCANsat.SCAN_Unity
 				return;
 			}
 
-			RefreshIcons();
+			vesselChanged = true;
 		}
 
 		private void soiChange(GameEvents.HostedFromToAction<Vessel, CelestialBody> action)
@@ -542,6 +544,12 @@ namespace SCANsat.SCAN_Unity
 
 		public void Update()
 		{
+			if (vesselChanged)
+			{
+				RefreshIcons();
+				vesselChanged = false;
+			}
+
 			if (!_isVisible || data == null || bigmap == null)
 			{
 				return;

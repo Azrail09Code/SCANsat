@@ -123,9 +123,19 @@ namespace SCANsat.SCAN_Unity
 			}
 		}
 
+		bool vesselChanged = false;
+
 		private void vesselChange(Vessel V)
 		{
 			v = FlightGlobals.ActiveVessel;
+			vesselChanged = true;
+		}
+
+		private void RefreshAfterVesselChanged()
+		{
+			vesselChanged = false;
+			
+			// TODO: make this smarter about not doing work if it doesn't need to
 
 			data = SCANUtil.getData(v.mainBody);
 
@@ -161,6 +171,11 @@ namespace SCANsat.SCAN_Unity
 
 		public void Update()
 		{
+			if (vesselChanged)
+			{
+				RefreshAfterVesselChanged();
+			}
+
 			if (!_isVisible || data == null)
 			{
 				return;

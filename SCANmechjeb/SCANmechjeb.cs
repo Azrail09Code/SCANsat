@@ -88,6 +88,11 @@ namespace SCANmechjeb
 
 		private void LateUpdate()
 		{
+			if (vesselChanged)
+			{
+				RefereshAfterVesselChange();
+			}
+
 			if (shutdown || !mjOnboard || mjTechTreeLocked || body == null || vessel == null || data == null)
 			{
 				return;
@@ -187,6 +192,8 @@ namespace SCANmechjeb
 			}
 		}
 
+		private bool vesselChanged = false;
+
 		private void VesselChange(Vessel v)
 		{
 			if (vessel != v)
@@ -194,7 +201,13 @@ namespace SCANmechjeb
 				return;
 			}
 
-			body = v.mainBody;
+			vesselChanged = true;
+		}
+
+		private void RefereshAfterVesselChange()
+		{
+			vesselChanged = false;
+			body = vessel.mainBody;
 
 			if (vessel.FindPartModulesImplementing<MechJebCore>().Count <= 0)
 			{

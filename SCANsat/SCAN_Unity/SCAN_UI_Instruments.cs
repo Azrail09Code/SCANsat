@@ -100,10 +100,12 @@ namespace SCANsat.SCAN_Unity
 			planetConstants(VC.to);
 		}
 
+		private bool vesselChanged = false;
+
 		private void vesselChange(Vessel V)
 		{
 			v = FlightGlobals.ActiveVessel;
-			resetResourceList();
+			vesselChanged = true;
 		}
 
 		public void SetScale(float scale)
@@ -124,6 +126,12 @@ namespace SCANsat.SCAN_Unity
 
 		public void Update()
 		{
+			if (vesselChanged)
+			{
+				resetResourceList();
+				vesselChanged = false;
+			}
+
 			if (!_isVisible || uiElement == null)
 			{
 				return;
