@@ -7,3 +7,6 @@ using System.Runtime.CompilerServices;
 [assembly: AssemblyCopyright("Danny")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
+
+// ideally this would be handled by the project reference in the csproj, but I think that requires a newer version of KSPBT
+[assembly:KSPAssemblyDependency("SCANsat.Unity", 0, 0)]
