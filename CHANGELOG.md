@@ -1,5 +1,12 @@
 # SCANsat Changelog
 
+## Unreleased
+
+- Fixed benign yet annoying assembly loader error about SCANsat.Unity
+- Updated Russian localization (thanks @BalaurGD )
+- Added Japanese localization (thanks @ThS45m )
+- Improved performance when many parts are destroyed or other vessel changes occur on the same frame (e.g. during RUD)
+
 ## 21.1 - 2025-09-17
 
 - Added Chinese localization (thanks @AmazingWood)
