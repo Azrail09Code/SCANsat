@@ -690,7 +690,7 @@ namespace SCANsat.SCAN_Unity
 				SCAN_UI_BigMap.Instance.RefreshMap();
 			}
 
-			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && SCAN_UI_MainMap.Instance.MapType)
+			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && SCAN_UI_MainMap.Instance.MapType == MainMapDisplayMode.Biome)
 			{
 				SCAN_UI_MainMap.Instance.resetImages();
 			}
@@ -727,7 +727,7 @@ namespace SCANsat.SCAN_Unity
 				SCAN_UI_BigMap.Instance.RefreshMap();
 			}
 
-			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && SCAN_UI_MainMap.Instance.MapType)
+			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && SCAN_UI_MainMap.Instance.MapType == MainMapDisplayMode.Biome)
 			{
 				SCAN_UI_MainMap.Instance.resetImages();
 			}
@@ -944,7 +944,7 @@ namespace SCANsat.SCAN_Unity
 				SCAN_UI_BigMap.Instance.RefreshMap();
 			}
 
-			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && !SCAN_UI_MainMap.Instance.MapType)
+			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && SCAN_UI_MainMap.Instance.MapType == MainMapDisplayMode.Terrain)
 			{
 				SCAN_UI_MainMap.Instance.resetImages();
 			}
@@ -979,7 +979,7 @@ namespace SCANsat.SCAN_Unity
 				SCAN_UI_BigMap.Instance.RefreshMap();
 			}
 
-			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && !SCAN_UI_MainMap.Instance.MapType)
+			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && SCAN_UI_MainMap.Instance.MapType == MainMapDisplayMode.Terrain)
 			{
 				SCAN_UI_MainMap.Instance.resetImages();
 			}
@@ -1013,7 +1013,7 @@ namespace SCANsat.SCAN_Unity
 				SCAN_UI_BigMap.Instance.RefreshMap();
 			}
 
-			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && !SCAN_UI_MainMap.Instance.MapType)
+			if (SCAN_UI_MainMap.Instance != null && SCAN_UI_MainMap.Instance.IsVisible && SCAN_UI_MainMap.Instance.MapType == MainMapDisplayMode.Terrain)
 			{
 				SCAN_UI_MainMap.Instance.resetImages();
 			}

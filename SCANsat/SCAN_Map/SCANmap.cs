@@ -893,7 +893,6 @@ namespace SCANsat.SCAN_Map
 			}
 
 			Texture2D readableScaledSpaceMap = SCANcontroller.controller.getVisualMapTexture(body);
-			Texture2D readableScaledSpaceNormalMap = SCANcontroller.controller.getVisualMapNormalTexture(body);
 
 			for (int i = 0; i < map.width; i++)
 			{
@@ -1173,120 +1172,53 @@ namespace SCANsat.SCAN_Map
 							break;
 						}
 					case mapType.Visual:
+					{
+						bool highResCovered = SCANUtil.isCovered(lon, lat, data, SCANtype.VisualHiRes);
+						bool lowResCovered = SCANUtil.isCovered(lon, lat, data, SCANtype.VisualLoRes);
+
+						if (readableScaledSpaceMap == null)
 						{
-							if (readableScaledSpaceMap == null)
+							baseColor = palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
+						}
+						else if (highResCovered || lowResCovered)
+						{
+							float fLat = ((float)lat + 90f) / 180f;
+							float fLon = ((float)lon + 270f) / 360f;
+
+							if (fLon < 0) { fLon += 1; }
+							if (fLon > 1) { fLon -= 1; }
+							fLon = 1 - fLon;
+
+							fLat = Mathf.Clamp01(fLat);
+							fLon = Mathf.Clamp01(fLon);
+
+							if (highResCovered)
 							{
-								baseColor = palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
-							}
-							else if (SCANUtil.isCovered(lon, lat, data, SCANtype.VisualHiRes))
-							{
-								float fLat = ((float)lat + 90f) / 180f;
-								float fLon = ((float)lon + 270f) / 360f;
-
-								if (fLon < 0)
-								{
-									fLon += 1;
-								}
-
-								if (fLon > 1)
-								{
-									fLon -= 1;
-								}
-
-								fLon = 1 - fLon;
-
-								fLat = Mathf.Clamp01(fLat);
-								fLon = Mathf.Clamp01(fLon);
-
 								baseColor = readableScaledSpaceMap.GetPixelBilinear(fLon, fLat);
-
-								if (readableScaledSpaceNormalMap != null)
-								{
-									HslColor hslBase = palette.ConvertRgbToHsl(baseColor);
-
-									double opacity = 0.8;
-
-									double lumOver = readableScaledSpaceNormalMap.GetPixelBilinear(fLon, fLat).b;
-									double lum = hslBase.L;
-
-									if (colorMap)
-									{
-										if (lum > 0.5d)
-										{
-											lum = (opacity * (1 - (1 - (2 * (lumOver - 0.5))) * (1 - lum))) + (1 - opacity) * lum;
-										}
-										else
-										{
-											lum = (opacity * (2 * lumOver * lum)) + (1 - opacity) * lum;
-										}
-
-										baseColor = palette.ConvertHslToRgb(hslBase.H, hslBase.S, lum);
-									}
-									else
-									{
-										if (lum > 0.5d)
-										{
-											lum = (1 - (1 - (2 * (lumOver - 0.5))) * (1 - lum));
-										}
-										else
-										{
-											lum = 2 * lumOver * lum;
-										}
-
-										baseColor = palette.ConvertToGrayscale(baseColor);
-									}
-								}
-							}
-							else if (SCANUtil.isCovered(lon, lat, data, SCANtype.VisualLoRes))
-							{
-								float fLat = ((float)lat + 90f) / 180f;
-								float fLon = ((float)lon + 270f) / 360f;
-
-								if (fLon < 0)
-								{
-									fLon += 1;
-								}
-
-								if (fLon > 1)
-								{
-									fLon -= 1;
-								}
-
-								fLon = 1 - fLon;
-
-								fLat = Mathf.Clamp01(fLat);
-								fLon = Mathf.Clamp01(fLon);
-
-								float width = readableScaledSpaceMap.width / (512f);
-								float height = readableScaledSpaceMap.height / (256f);
-
-								int ilon = Mathf.RoundToInt((int)(fLon * 512f) * width);
-								int ilat = Mathf.RoundToInt((int)(fLat * 256f) * height);
-
-								if (ilon > readableScaledSpaceMap.width)
-								{
-									ilon = readableScaledSpaceMap.width - 1;
-								}
-
-								if (ilat > readableScaledSpaceMap.height)
-								{
-									ilat = readableScaledSpaceMap.height - 1;
-								}
-
-								baseColor = readableScaledSpaceMap.GetPixel(ilon, ilat);
-
-								if (!colorMap)
-								{
-									baseColor = palette.ConvertToGrayscale(baseColor);
-								}
 							}
 							else
 							{
-								baseColor = unscanned;
+								int ilon = Mathf.RoundToInt(fLon * readableScaledSpaceMap.width);
+								int ilat = Mathf.RoundToInt(fLat * readableScaledSpaceMap.height);
+
+								baseColor = readableScaledSpaceMap.GetPixel(ilon, ilat);
 							}
 
-							break;
+							// Ensure full opacity for visual maps
+							baseColor.a = 255;
+
+							if (!colorMap)
+							{
+								baseColor = palette.ConvertToGrayscale(baseColor);
+							}
 						}
+						else
+						{
+							baseColor = unscanned;
+						}
+
+						break;
+					}
 				}
 
 				if (resourceOn)

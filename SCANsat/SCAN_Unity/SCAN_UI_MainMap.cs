@@ -11,17 +11,16 @@
  */
 #endregion
 
+using KSP.UI;
+using SCANsat.SCAN_Data;
+using SCANsat.SCAN_Toolbar;
+using SCANsat.SCAN_UI.UI_Framework;
+using SCANsat.Unity;
+using SCANsat.Unity.Interfaces;
+using SCANsat.Unity.Unity;
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
-using SCANsat.SCAN_Toolbar;
-using SCANsat.Unity.Interfaces;
-using SCANsat.Unity;
-using SCANsat.Unity.Unity;
-using SCANsat.SCAN_Data;
-using SCANsat.SCAN_UI.UI_Framework;
-using KSP.UI;
 using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
 
 namespace SCANsat.SCAN_Unity
@@ -183,24 +182,12 @@ namespace SCANsat.SCAN_Unity
 
 			sensors = SCANcontroller.controller.activeSensorsOnVessel(v.id, false);
 
-			if (!SCANcontroller.controller.mainMapBiome)
+			if (SCAN_Settings_Config.Instance.MapGenerationSpeed > 1)
 			{
-				if (SCAN_Settings_Config.Instance.MapGenerationSpeed > 1)
-				{
-					drawPartialMap(sensors, false);
-				}
-
-				drawPartialMap(sensors, true);
+				drawPartialMap(SCANcontroller.controller.mainMapDisplayMode, false);
 			}
-			else
-			{
-				if (SCAN_Settings_Config.Instance.MapGenerationSpeed > 1)
-				{
-					drawBiomeMap(sensors, false);
-				}
 
-				drawBiomeMap(sensors, true);
-			}
+			drawPartialMap(SCANcontroller.controller.mainMapDisplayMode, true);
 
 			lastUpdate++;
 
@@ -515,12 +502,12 @@ namespace SCANsat.SCAN_Unity
 			}
 		}
 
-		public bool MapType
+		public MainMapDisplayMode MapType
 		{
-			get { return SCANcontroller.controller.mainMapBiome; }
+			get { return SCANcontroller.controller.mainMapDisplayMode; }
 			set
 			{
-				SCANcontroller.controller.mainMapBiome = value;
+				SCANcontroller.controller.mainMapDisplayMode = value;
 
 				resetImages();
 			}
@@ -811,7 +798,7 @@ namespace SCANsat.SCAN_Unity
 			float lat = (float)SCANUtil.fixLatShift(ves.latitude);
 
 			string units = "";
-			if (SCANcontroller.controller.mainMapBiome)
+			if (SCANcontroller.controller.mainMapDisplayMode == MainMapDisplayMode.Biome)
 			{
 				if (SCANUtil.isCovered(lon, lat, data, SCANtype.Biome))
 				{
@@ -852,9 +839,15 @@ namespace SCANsat.SCAN_Unity
 			return string.Format("({0}°,{1}°{2})", lat.ToString("F1"), lon.ToString("F1"), units);
 		}
 
-		private void drawPartialMap(SCANtype type, bool apply)
+		private void drawPartialMap(MainMapDisplayMode display, bool apply)
 		{
 			bool pqsController = data.Body.pqsController != null;
+			bool biomeMap = data.Body.BiomeMap != null;
+
+			if (biomeBuilding && biomeMap && display == MainMapDisplayMode.Biome)
+			{
+				buildBiomeCache();
+			}
 
 			if (data.ControllerBuilding || data.OverlayBuilding)
 			{
@@ -901,30 +894,7 @@ namespace SCANsat.SCAN_Unity
 					continue;
 				}
 
-				Color32 c = palette.Grey;
-				float val = data.HeightMapValue(data.Body.flightGlobalsIndex, ilon, scanline);
-				if (SCANUtil.isCovered(ilon, scanline, data, SCANtype.Altimetry))
-				{
-					if (SCANUtil.isCovered(ilon, scanline, data, SCANtype.AltimetryHiRes))
-					{
-						c = palette.heightToColor(val, Color, data.TerrainConfig);
-					}
-					else
-					{
-						c = palette.heightToColor(val, false, data.TerrainConfig);
-					}
-				}
-				else
-				{
-					if (scanline % 30 == 0 && ilon % 3 == 0)
-					{
-						c = palette.White;
-					}
-					else if (ilon % 30 == 0 && scanline % 3 == 0)
-					{
-						c = palette.White;
-					}
-				}
+				Color32 c = getMapPixelColor(display, scanline, ilon);
 
 				if (TerminatorToggle)
 				{
@@ -940,16 +910,6 @@ namespace SCANsat.SCAN_Unity
 					else
 					{
 						if (scanline - 90 > crossingLat * Mathf.Rad2Deg)
-						{
-							c = palette.lerp(c, palette.Black, 0.5f);
-						}
-					}
-				}
-				else
-				{
-					if (type != SCANtype.Nothing)
-					{
-						if (!SCANUtil.isCoveredByAll(ilon, scanline, data, type))
 						{
 							c = palette.lerp(c, palette.Black, 0.5f);
 						}
@@ -982,102 +942,85 @@ namespace SCANsat.SCAN_Unity
 			}
 		}
 
-		private void drawBiomeMap(SCANtype type, bool apply)
+		private Color32 getMapPixelColor(MainMapDisplayMode display, int scanline, int ilon)
 		{
+			bool pqsController = data.Body.pqsController != null;
 			bool biomeMap = data.Body.BiomeMap != null;
-
-			if (biomeBuilding && biomeMap)
+			Color32 c = palette.Grey;
+			switch (display)
 			{
-				buildBiomeCache();
-			}
-
-			if (scanline == 0 && TerminatorToggle)
-			{
-				double sunLon = data.Body.GetLongitude(Planetarium.fetch.Sun.position, false);
-				double sunLat = data.Body.GetLatitude(Planetarium.fetch.Sun.position, false);
-
-				sunLatCenter = SCANUtil.fixLatShift(sunLat);
-
-				if (sunLatCenter >= 0)
-				{
-					sunLonCenter = SCANUtil.fixLonShift(sunLon + 90);
-				}
-				else
-				{
-					sunLonCenter = SCANUtil.fixLonShift(sunLon - 90);
-				}
-
-				gamma = Math.Abs(sunLatCenter) < 0.55 ? 100 : Math.Tan(Mathf.Deg2Rad * (90 - Math.Abs(sunLatCenter)));
-			}
-
-			for (int ilon = 0; ilon < 360; ilon++)
-			{
-				if (!biomeMap)
-				{
-					cols_height_map_small[ilon] = palette.lerp(palette.black, palette.white, UnityEngine.Random.value);
-					continue;
-				}
-
-				Color32 c = biomeCache[scanline * 360 + ilon];
-				if (!SCANUtil.isCovered(ilon, scanline, data, SCANtype.Biome))
-				{
-					c = palette.Grey;
-				}
-
-				if (TerminatorToggle)
-				{
-					double crossingLat = Math.Atan(gamma * Math.Sin(Mathf.Deg2Rad * (ilon - 180) - Mathf.Deg2Rad * sunLonCenter));
-
-					if (sunLatCenter >= 0)
+				case MainMapDisplayMode.Terrain:
+					if (!pqsController)
 					{
-						if (scanline - 90 < crossingLat * Mathf.Rad2Deg)
-						{
-							c = palette.lerp(c, palette.Black, 0.5f);
-						}
+						c = palette.lerp(palette.black, palette.white, UnityEngine.Random.value);
 					}
-					else
+					else if (SCANUtil.isCovered(ilon, scanline, data, SCANtype.Altimetry))
 					{
-						if (scanline - 90 > crossingLat * Mathf.Rad2Deg)
+						float val = data.HeightMapValue(data.Body.flightGlobalsIndex, ilon, scanline);
+						if (SCANUtil.isCovered(ilon, scanline, data, SCANtype.AltimetryHiRes))
 						{
-							c = palette.lerp(c, palette.Black, 0.5f);
+							c = palette.heightToColor(val, Color, data.TerrainConfig);
 						}
+						else
+						{
+							c = palette.heightToColor(val, false, data.TerrainConfig);
+						}
+						return c;
 					}
-				}
-				else
-				{
-					if (type != SCANtype.Nothing)
+					break;
+
+				case MainMapDisplayMode.Biome:
+					if (!biomeMap)
 					{
-						if (!SCANUtil.isCoveredByAll(ilon, scanline, data, type))
-						{
-							c = palette.lerp(c, palette.Black, 0.5f);
-						}
+						c = palette.lerp(palette.black, palette.white, UnityEngine.Random.value);
 					}
-				}
+					else if (SCANUtil.isCovered(ilon, scanline, data, SCANtype.Biome))
+					{
+						c = biomeCache[scanline * 360 + ilon];
+						return c;
+					}
+					break;
 
-				cols_height_map_small[ilon] = c;
+				case MainMapDisplayMode.Visual:
+					bool highResCovered = SCANUtil.isCovered(ilon, scanline, data, SCANtype.VisualHiRes);
+					bool lowResCovered = SCANUtil.isCovered(ilon, scanline, data, SCANtype.VisualLoRes);
+					if (highResCovered || lowResCovered)
+					{
+						double lat = scanline - 90;
+						double lon = ilon - 180;
+
+						float fLat = ((float)lat + 90f) / 180f;
+						float fLon = ((float)lon + 270f) / 360f;
+
+						if (fLon < 0) { fLon += 1; }
+						if (fLon > 1) { fLon -= 1; }
+						fLon = 1 - fLon;
+
+						fLat = Mathf.Clamp01(fLat);
+						fLon = Mathf.Clamp01(fLon);
+
+						Texture2D readableScaledSpaceMap = SCANcontroller.controller.getVisualMapTexture(data.Body);
+
+						int ilon_tex = Mathf.RoundToInt(fLon * readableScaledSpaceMap.width);
+						int ilat_tex = Mathf.RoundToInt(fLat * readableScaledSpaceMap.height);
+
+						c = readableScaledSpaceMap.GetPixel(ilon_tex, ilat_tex);
+						c.a = 255;
+
+						return c;
+					}
+					break;
 			}
 
-			map_small.SetPixels32(0, scanline, 360, 1, cols_height_map_small);
-
-			if (apply)
+			if (scanline % 30 == 0 && ilon % 3 == 0)
 			{
-				if (scanline < 179)
-				{
-					map_small.SetPixels32(0, scanline + 1, 360, 1, palette.small_redline);
-				}
+				c = palette.White;
 			}
-
-			scanline++;
-
-			if (apply || scanline >= 180)
+			else if (ilon % 30 == 0 && scanline % 3 == 0)
 			{
-				map_small.Apply();
+				c = palette.White;
 			}
-
-			if (scanline >= 180)
-			{
-				scanline = 0;
-			}
+			return c;
 		}
 
 		private void buildBiomeCache()
@@ -1130,7 +1073,7 @@ namespace SCANsat.SCAN_Unity
 
 			map_small.Apply();
 
-			if (SCANcontroller.controller.mainMapBiome)
+			if (SCANcontroller.controller.mainMapDisplayMode == MainMapDisplayMode.Biome)
 			{
 				biomeBuilding = true;
 				scanline = 0;

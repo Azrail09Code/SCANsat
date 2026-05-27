@@ -5,7 +5,7 @@ using System.Threading;
 using UnityEngine;
 using SCANsat.SCAN_Data;
 using SCANsat.SCAN_Platform;
-using Log = KSPBuildTools.Log;
+using Log = KSPCommunityLib.Logging.Log;
 
 namespace SCANsat.SCAN_Map
 {

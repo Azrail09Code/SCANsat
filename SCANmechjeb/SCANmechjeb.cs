@@ -14,8 +14,7 @@
 using System.Collections;
 using SCANsat;
 using SCANsat.SCAN_Data;
-using log = SCANsat.SCAN_Platform.Logging.ConsoleLogger;
-using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
+using Log = KSPCommunityLib.Logging.Log;
 using MuMech;
 
 using UnityEngine;
@@ -35,6 +34,43 @@ namespace SCANmechjeb
 		private SCANdata data;
 		private Vector2d coords = new Vector2d();
 		private bool shutdown, mjOnboard, mjTechTreeLocked;
+
+		#region Helpers
+
+		/// <summary>
+		/// Reflectively fetches MechJebCore's target controller, tolerating the
+		/// 'Target'/'target' field rename across MechJeb versions. Returns null
+		/// (and logs) if the field can't be resolved under any known name.
+		/// </summary>
+		private static MechJebModuleTargetController GetMJCoreTarget(MechJebCore mjc)
+		{
+			var t = mjc.GetType();
+			var field = t.GetField("Target") ?? t.GetField("target");
+			if (field == null)
+			{
+				Log.Message("MechJebCore 'target' field could not be found under any known name; MechJeb support broken.");
+			}
+
+			return field?.GetValue(mjc) as MechJebModuleTargetController;
+		}
+
+		/// <summary>
+		/// Reflectively reads the guidance module's hidden flag, tolerating the
+		/// 'Hidden'/'hidden' field rename across MechJeb versions. Returns null
+		/// (and logs) if the field can't be resolved under any known name.
+		/// </summary>
+		private static bool? IsMJGuidanceModuleHidden(DisplayModule gm)
+		{
+			var t = gm.GetType();
+			var field = t.GetField("Hidden") ?? t.GetField("hidden");
+			if (field == null)
+			{
+				Log.Message("MechJebGuidanceModule 'hidden' field could not be found under any known name; MechJeb support broken.");
+			}
+			return field?.GetValue(gm) as bool?;
+		}
+
+		#endregion
 
 		private void Start()
 		{
@@ -227,7 +263,7 @@ namespace SCANmechjeb
 				return;
 			}
 
-			target = mjCore.target;
+			target = GetMJCoreTarget(mjCore);
 
 			if (target == null)
 			{
@@ -256,7 +292,8 @@ namespace SCANmechjeb
 
 				guidanceModule.UnlockCheck();
 
-				if (guidanceModule.hidden)
+				var hidden = IsMJGuidanceModuleHidden(guidanceModule);
+				if (hidden ?? true) // Defaults to a hidden state if the field cannot be found
 				{
 					SCANcontroller.controller.MechJebLoaded = false;
 					way = null;

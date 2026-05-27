@@ -11,22 +11,21 @@
  */
 #endregion
 
-using System;
-using System.Linq;
-using System.Collections.Generic;
-using UnityEngine;
 using Contracts;
 using FinePrint;
 using FinePrint.Contracts;
 using FinePrint.Contracts.Parameters;
 using FinePrint.Utilities;
-using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
 using SCANsat.SCAN_Platform;
-using SCANsat.SCAN_Palettes;
+using SCANsat.SCAN_Reflection;
 using SCANsat.SCAN_Unity;
-using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
-using Log = KSPBuildTools.Log;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Runtime.Serialization.Formatters.Binary;
+using UnityEngine;
+using Log = KSPCommunityLib.Logging.Log;
 
 namespace SCANsat.SCAN_Data
 {
@@ -55,32 +54,6 @@ namespace SCANsat.SCAN_Data
 			if (heightMaps.ContainsKey(body.flightGlobalsIndex))
 			{
 				built = true;
-			}
-
-			terrainConfig = SCANcontroller.getTerrainNode(b.bodyName);
-
-			if (terrainConfig == null)
-			{
-				float? clamp = null;
-				if (b.ocean)
-				{
-					clamp = 0;
-				}
-
-				float newMax;
-
-				try
-				{
-					newMax = ((float)CelestialUtilities.GetHighestPeak(b)).Mathf_Round(-2);
-				}
-				catch (Exception e)
-				{
-					SCANUtil.SCANlog("Error in calculating Max Height for {0}; using default value\n{1}", b.displayName.LocalizeBodyName(), e);
-					newMax = SCANconfigLoader.SCANNode.DefaultMaxHeightRange;
-				}
-
-				terrainConfig = new SCANterrainConfig(SCANconfigLoader.SCANNode.DefaultMinHeightRange, newMax, clamp, SCAN_Palette_Config.DefaultPalette.GetPalette(0), 7, false, false, body);
-				SCANcontroller.addToTerrainConfigData(body.bodyName, terrainConfig);
 			}
 		}
 
