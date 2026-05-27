@@ -317,8 +317,9 @@ namespace SCANsat
 					newMin = SCANconfigLoader.SCANNode.DefaultMinHeightRange;
 					newMax = SCANconfigLoader.SCANNode.DefaultMaxHeightRange;
 				}
-					SCANUtil.SCANlog($"[{b.bodyName}] Terrain Config Generation: Heights between {newMin:F0}m and {newMax:F0}m. Clamp is {clamp}.");
-					addToTerrainConfigData(b.bodyName, new SCANterrainConfig(newMin, newMax, clamp, SCANUtil.PaletteLoader(SCANconfigLoader.SCANNode.DefaultPalette, 7), 7, false, false, b));
+
+				SCANUtil.SCANlog($"[{b.bodyName}] Terrain Config Generation: Heights between {newMin:F0}m and {newMax:F0}m. Clamp is {clamp}.");
+				addToTerrainConfigData(b.bodyName, new SCANterrainConfig(newMin, newMax, clamp, SCANUtil.PaletteLoader(SCANconfigLoader.SCANNode.DefaultPalette, 7), 7, false, false, b));
 			}
 		}
 
@@ -715,7 +716,6 @@ namespace SCANsat
 							}
 
 							data.Disabled = node_body.parse("Disabled", false);
-
 							data.TerrainConfig = getTerrainNode(body.bodyName);
 						}
 						catch (Exception e)
@@ -787,17 +787,20 @@ namespace SCANsat
 							node_body.AddValue("LandingTarget", string.Format("{0:N4},{1:N4}", w.Latitude, w.Longitude));
 						}
 					}
-					node_body.AddValue("MinHeightRange", body_scan.TerrainConfig.MinTerrain / body_scan.TerrainConfig.MinHeightMultiplier);
-					node_body.AddValue("MaxHeightRange", body_scan.TerrainConfig.MaxTerrain / body_scan.TerrainConfig.MaxHeightMultiplier);
-					if (body_scan.TerrainConfig.ClampTerrain != null)
+					if (body_scan.TerrainConfig != null)
 					{
-						node_body.AddValue("ClampHeight", body_scan.TerrainConfig.ClampTerrain / body_scan.TerrainConfig.ClampHeightMultiplier);
-					}
+						node_body.AddValue("MinHeightRange", body_scan.TerrainConfig.MinTerrain / body_scan.TerrainConfig.MinHeightMultiplier);
+						node_body.AddValue("MaxHeightRange", body_scan.TerrainConfig.MaxTerrain / body_scan.TerrainConfig.MaxHeightMultiplier);
+						if (body_scan.TerrainConfig.ClampTerrain != null)
+						{
+							node_body.AddValue("ClampHeight", body_scan.TerrainConfig.ClampTerrain / body_scan.TerrainConfig.ClampHeightMultiplier);
+						}
 
-					node_body.AddValue("PaletteName", body_scan.TerrainConfig.ColorPal.Name);
-					node_body.AddValue("PaletteSize", body_scan.TerrainConfig.PalSize);
-					node_body.AddValue("PaletteReverse", body_scan.TerrainConfig.PalRev);
-					node_body.AddValue("PaletteDiscrete", body_scan.TerrainConfig.PalDis);
+						node_body.AddValue("PaletteName", body_scan.TerrainConfig.ColorPal.Name);
+						node_body.AddValue("PaletteSize", body_scan.TerrainConfig.PalSize);
+						node_body.AddValue("PaletteReverse", body_scan.TerrainConfig.PalRev);
+						node_body.AddValue("PaletteDiscrete", body_scan.TerrainConfig.PalDis);
+					}
 					node_body.AddValue("Map", body_scan.shortSerialize());
 					node_progress.AddNode(node_body);
 				}
