@@ -1584,6 +1584,7 @@ namespace SCANsat
 
 			material = scaledMesh.sharedMaterial; // TODO: what if there are multiple materials?  do we need to check all of them?
 			string shaderName = material.shader.name;
+			SCANUtil.SCANdebugLog($"[{b.name}] Material loaded {shaderName}");
 
 			if (shaderName == "Terrain/Gas Giant")
 			{
@@ -1595,7 +1596,11 @@ namespace SCANsat
 			{
 				SCANparallaxContinued.LoadParallax(b, ref material);
 				useMaterialForColorMap = false;
-				colorMapTextureName = "_ColorMap";
+				string contains_main = material.HasProperty("_MainTex") ? " _MainTex" : null;
+				string contains_map = material.HasProperty("_ColorMap") ? "_ColorMap" : null;
+				string contains_cube = material.HasProperty("_ColorCube") ? "_ColorCube" : null;
+				SCANUtil.SCANdebugLog($"[{b.name}] Material uses Parallax and contains: {contains_main}, {contains_map}, {contains_cube}.");
+				colorMapTextureName = contains_cube != null ? contains_cube : "_ColorMap";
 				return;
 			}
 			else if (material.HasProperty("_MainTex"))
@@ -1627,6 +1632,7 @@ namespace SCANsat
 					if (sourceColorTexture != null)
 					{
 						colorMap = sourceColorTexture.isReadable ? sourceColorTexture : readableTexture(sourceColorTexture, useMaterialForColorMap ? material : null);
+						SCANUtil.SCANdebugLog($"[{b.name}] {colorMapTextureName} Texture Size is {colorMap.width} x {colorMap.height}.");
 						readableScaledSpaceMaps.Add(b, colorMap);
 					}
 					else
