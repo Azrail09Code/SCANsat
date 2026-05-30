@@ -16,6 +16,8 @@ using Contracts;
 using FinePrint.Contracts;
 using FinePrint.Contracts.Parameters;
 using FinePrint.Utilities;
+using KSPCommunityLib.Logging;
+using KSPTextureLoader;
 using SCANsat.SCAN_Data;
 using SCANsat.SCAN_Map;
 using SCANsat.SCAN_Palettes;
@@ -25,17 +27,12 @@ using SCANsat.SCAN_Toolbar;
 using SCANsat.SCAN_UI.UI_Framework;
 using SCANsat.SCAN_Unity;
 using SCANsat.Unity.Interfaces;
-using SoftMasking.Extensions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO;
 using System.Linq;
-using System.Text;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.Profiling;
 using Log = KSPCommunityLib.Logging.Log;
 using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
 
@@ -159,6 +156,7 @@ namespace SCANsat
 
 		/* Visual Map Texture Data */
 		private Dictionary<CelestialBody, Texture2D> readableScaledSpaceMaps = new Dictionary<CelestialBody, Texture2D>();
+		private Dictionary<CelestialBody, CPUTexture2D> mappableScaledSpaceMaps = new Dictionary<CelestialBody, CPUTexture2D>();
 		private CelestialBody bigMapBodyScaledSpace;
 		private CelestialBody zoomMapBodyScaledSpace;
 
@@ -237,19 +235,58 @@ namespace SCANsat
 			}
 		}
 
-		public Texture2D getVisualMapTexture(CelestialBody b)
+		public bool isVisualTextureLoaded(CelestialBody b)
 		{
 			if (!SCAN_Settings_Config.Instance.VisibleMapsActive)
 			{
-				return null;
+				return false;
 			}
 
-			if (readableScaledSpaceMaps.ContainsKey(b))
+			// Check if a texture is present in either dictionary
+			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null || mappableScaledSpaceMaps.GetValueOrDefault(b) != null)
 			{
-				return readableScaledSpaceMaps[b];
+				return true;
 			}
 
-			return null;
+			return false;
+		}
+
+		public Color32 GetVisualPixel(CelestialBody b, double lon, double lat)
+		{
+			Texture2D cachedColorMap = readableScaledSpaceMaps.GetValueOrDefault(b);
+			CPUTexture2D mappedColorMap = mappableScaledSpaceMaps.GetValueOrDefault(b);
+
+			// If no textures are loaded, return static
+			if (cachedColorMap == null && mappedColorMap == null)
+			{
+				return palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
+			}
+
+			// Using doubles because Unity floats apparently default to double and this is faster to just avoid that
+			Color32 c = palette.Grey;
+
+			float fLat = ((float)lat + 90f) / 180f;
+			float fLon = ((float)lon + 270f) / 360f;
+
+			if (fLon < 0) { fLon += 1; }
+			if (fLon > 1) { fLon -= 1; }
+			fLon = 1 - fLon;
+
+			fLat = Mathf.Clamp01(fLat);
+			fLon = Mathf.Clamp01(fLon);
+
+
+			if (mappedColorMap != null)
+			{
+				c = mappedColorMap.GetPixelBilinear(fLon, fLat);
+			}
+			else
+			{
+				c = cachedColorMap.GetPixelBilinear(fLon, fLat);
+			}
+
+			c.a = 255; // Ensure map is fully opaque regardless of source texture alpha
+			return c;
 		}
 
 		public static List<SCANterrainConfig> EncodeTerrainConfigs
@@ -282,6 +319,51 @@ namespace SCANsat
 			}
 		}
 
+		public static void generateTerrainConfig(CelestialBody b)
+		{
+			if (b.pqsController == null)
+			{
+				SCANUtil.SCANlog($"[{b.name}] PQS Controller not loaded - no terrain data generated.");
+				return;
+			}
+
+			float? clamp = null;
+			if (b.ocean)
+			{
+				clamp = 0;
+			}
+
+			float newMin;
+			float newMax;
+
+			try
+			{
+				newMin = ((float)(b.pqsController.radiusMin - b.pqsController.radius)).Mathf_Round(-1);
+				newMax = ((float)(b.pqsController.radiusMax - b.pqsController.radius)).Mathf_Round(-1);
+				if (newMin == newMax)
+				{
+					throw new Exception("Gas Giant / Flat Body");  // Clamp altimetry if body is perfectly smooth / gas giant
+				}
+			}
+			catch (Exception e)
+			{
+				SCANUtil.SCANlog($"[{b.name}] Error in calculating Max Height; using default value\n{e}");
+				newMin = SCANconfigLoader.SCANNode.DefaultMinHeightRange;
+				newMax = SCANconfigLoader.SCANNode.DefaultMaxHeightRange;
+			}
+
+			addToTerrainConfigData(b.bodyName, new SCANterrainConfig(newMin, newMax, clamp, SCANUtil.PaletteLoader(SCANconfigLoader.SCANNode.DefaultPalette, 7), 7, false, false, b));
+		}
+
+		//public void regenerateTerrainConfig(CelestialBody b)
+		//{
+		//	if (b == null)
+		//	{
+		//		return;
+		//	}
+		//	addToTerrainConfigData(b.bodyName, generateTerrainConfig(b));
+		//}
+
 		public static void checkLoadedTerrainNodes()
 		{
 			for (int i = 0; i < FlightGlobals.Bodies.Count; i++)
@@ -293,33 +375,7 @@ namespace SCANsat
 					continue;
 				}
 
-				float? clamp = null;
-				if (b.ocean)
-				{
-					clamp = 0;
-				}
-
-				float newMin;
-				float newMax;
-
-				try
-				{
-					newMin = ((float)(b.pqsController.radiusMin - b.pqsController.radius)).Mathf_Round(-1);
-					newMax = ((float)(b.pqsController.radiusMax - b.pqsController.radius)).Mathf_Round(-1);
-					if (newMin == newMax)
-					{
-						throw new Exception("Gas Giant / Flat Body");  // Clamp altimetry if body is perfectly smooth / gas giant
-					}
-				}
-				catch (Exception e)
-				{
-					SCANUtil.SCANlog($"[{b.name}] Error in calculating Max Height; using default value\n{e}");
-					newMin = SCANconfigLoader.SCANNode.DefaultMinHeightRange;
-					newMax = SCANconfigLoader.SCANNode.DefaultMaxHeightRange;
-				}
-
-				SCANUtil.SCANlog($"[{b.bodyName}] Terrain Config Generation: Heights between {newMin:F0}m and {newMax:F0}m. Clamp is {clamp}.");
-				addToTerrainConfigData(b.bodyName, new SCANterrainConfig(newMin, newMax, clamp, SCANUtil.PaletteLoader(SCANconfigLoader.SCANNode.DefaultPalette, 7), 7, false, false, b));
+				generateTerrainConfig(b);
 			}
 		}
 
@@ -402,7 +458,7 @@ namespace SCANsat
 					{
 						continue;
 					}
-					//SCANUtil.SCANlog("Loading SCANsat resource config settings: {0}", r.Name);
+
 					if (!masterResourceNodes.Contains(r.Name))
 					{
 						masterResourceNodes.Add(r.Name, r);
@@ -1584,7 +1640,6 @@ namespace SCANsat
 
 			material = scaledMesh.sharedMaterial; // TODO: what if there are multiple materials?  do we need to check all of them?
 			string shaderName = material.shader.name;
-			SCANUtil.SCANdebugLog($"[{b.name}] Material loaded {shaderName}");
 
 			if (shaderName == "Terrain/Gas Giant")
 			{
@@ -1600,7 +1655,7 @@ namespace SCANsat
 				string contains_map = material.HasProperty("_ColorMap") ? "_ColorMap" : null;
 				string contains_cube = material.HasProperty("_ColorCube") ? "_ColorCube" : null;
 				SCANUtil.SCANdebugLog($"[{b.name}] Material uses Parallax and contains: {contains_main}, {contains_map}, {contains_cube}.");
-				colorMapTextureName = contains_cube != null ? contains_cube : "_ColorMap";
+				colorMapTextureName = "_ColorMap";
 				return;
 			}
 			else if (material.HasProperty("_MainTex"))
@@ -1616,7 +1671,7 @@ namespace SCANsat
 		/// Caches visual textures (colour map)
 		void CacheVisualTexture(CelestialBody b, Material material, string colorMapTextureName, bool useMaterialForColorMap)
 		{
-			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null)
+			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null || mappableScaledSpaceMaps.GetValueOrDefault(b) != null)
 			{
 				return; // Already cached
 			}
@@ -1632,7 +1687,6 @@ namespace SCANsat
 					if (sourceColorTexture != null)
 					{
 						colorMap = sourceColorTexture.isReadable ? sourceColorTexture : readableTexture(sourceColorTexture, useMaterialForColorMap ? material : null);
-						SCANUtil.SCANdebugLog($"[{b.name}] {colorMapTextureName} Texture Size is {colorMap.width} x {colorMap.height}.");
 						readableScaledSpaceMaps.Add(b, colorMap);
 					}
 					else
@@ -1644,7 +1698,7 @@ namespace SCANsat
 			}
 			catch (Exception e)
 			{
-				Log.Error($"Error caching visual texture with luminance for body {b.name}: {e}");
+				Log.Error($"Error caching visual texture from materials for body {b.name}: {e}");
 			}
 		}
 
@@ -1660,6 +1714,45 @@ namespace SCANsat
 				return;
 			}
 
+			switch (s)
+			{
+				case mapSource.BigMap:
+					bigMapBodyScaledSpace = b;
+					break;
+				case mapSource.ZoomMap:
+					zoomMapBodyScaledSpace = b;
+					break;
+			}
+
+			if (mappableScaledSpaceMaps.GetValueOrDefault(b) != null)
+			{
+				return; // Already cached
+			}
+
+			ConfigNode[] visualOverrides = GameDatabase.Instance.GetConfigNodes("SCANSAT_BODY_TEXTURES");
+
+			for (int i = 0; i < visualOverrides.Length; i++)
+			{
+				ConfigNode node = visualOverrides[i];
+				if (node.HasValue("name") && node.HasValue("colorMap"))
+				{
+					string bodyName = node.GetValue("name");
+					if (bodyName == b.name)
+					{
+						string baseFolder = System.IO.Directory.GetParent(KSPUtil.ApplicationRootPath).FullName;
+						string colorMapCPUTextureName = (baseFolder + '/' + node.GetValue("colorMap")).Replace("\\", "/");
+						CPUTextureHandle colorMap = TextureLoader.LoadCPUTexture(colorMapCPUTextureName);
+						if (colorMap.IsError)
+						{
+							Log.Error($"[{b.name}] Visual Data path not loaded: {colorMapCPUTextureName}");
+							return;
+						}
+						mappableScaledSpaceMaps.Add(b, colorMap.GetTexture());
+						return;
+					}
+				}
+			}
+
 			GetVisualMapTexturesForBody(b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName);
 
 			if (material == null)
@@ -1670,16 +1763,6 @@ namespace SCANsat
 			{
 				// Load color map
 				CacheVisualTexture(b, material, colorMapTextureName, useMaterialForColorMap);
-			}
-
-			switch (s)
-			{
-				case mapSource.BigMap:
-					bigMapBodyScaledSpace = b;
-					break;
-				case mapSource.ZoomMap:
-					zoomMapBodyScaledSpace = b;
-					break;
 			}
 		}
 
@@ -1722,6 +1805,13 @@ namespace SCANsat
 				GameObject.Destroy(readableScaledSpaceMaps[b]);
 				readableScaledSpaceMaps[b] = null;
 				readableScaledSpaceMaps.Remove(b);
+			}
+
+			if (mappableScaledSpaceMaps.ContainsKey(b))
+			{
+				// TODO: Do I need to destroy these textures as well?
+				mappableScaledSpaceMaps[b] = null;
+				mappableScaledSpaceMaps.Remove(b);
 			}
 		}
 
@@ -2252,8 +2342,6 @@ namespace SCANsat
 								res.MinValue = min;
 								res.MaxValue = max;
 							}
-							//else
-							//SCANUtil.SCANlog("No resources found assigned for Celestial Body: {0}, skipping...", b.bodyName);
 						}
 						else
 						{

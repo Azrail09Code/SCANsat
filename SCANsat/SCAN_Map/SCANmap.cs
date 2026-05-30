@@ -892,8 +892,6 @@ namespace SCANsat.SCAN_Map
 				}
 			}
 
-			Texture2D readableScaledSpaceMap = SCANcontroller.controller.getVisualMapTexture(body);
-
 			for (int i = 0; i < map.width; i++)
 			{
 				/* Introduce altimetry check here; Use unprojected lat/long coordinates
@@ -905,7 +903,7 @@ namespace SCANsat.SCAN_Map
 				double cacheLat = ((mapstep + 1) * 1.0f / mapscale) - 90f + lat_offset;
 				double lon = (i * 1.0f / mapscale) - 180f + lon_offset;
 
-				if (mType != mapType.Visual)
+				if (mType == mapType.Altimetry || mType == mapType.Slope)
 				{
 					if (body.pqsController != null && cache && mapstep + 1 < map.height)
 					{
@@ -1173,48 +1171,30 @@ namespace SCANsat.SCAN_Map
 						}
 					case mapType.Visual:
 					{
+						if (!SCANcontroller.controller.isVisualTextureLoaded(body))
+						{
+							baseColor = unscanned;
+							break;
+						}
+
 						bool highResCovered = SCANUtil.isCovered(lon, lat, data, SCANtype.VisualHiRes);
 						bool lowResCovered = SCANUtil.isCovered(lon, lat, data, SCANtype.VisualLoRes);
 
-						if (readableScaledSpaceMap == null)
+						if (highResCovered || lowResCovered)
 						{
-							baseColor = palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
-						}
-						else if (highResCovered || lowResCovered)
-						{
-							float fLat = ((float)lat + 90f) / 180f;
-							float fLon = ((float)lon + 270f) / 360f;
-
-							if (fLon < 0) { fLon += 1; }
-							if (fLon > 1) { fLon -= 1; }
-							fLon = 1 - fLon;
-
-							fLat = Mathf.Clamp01(fLat);
-							fLon = Mathf.Clamp01(fLon);
-
-							if (highResCovered)
+							if (!highResCovered)
 							{
-								baseColor = readableScaledSpaceMap.GetPixelBilinear(fLon, fLat);
-							}
-							else
-							{
-								int ilon = Mathf.RoundToInt(fLon * readableScaledSpaceMap.width);
-								int ilat = Mathf.RoundToInt(fLat * readableScaledSpaceMap.height);
-
-								baseColor = readableScaledSpaceMap.GetPixel(ilon, ilat);
+								// Scale data to create a 512 x 256 map of blocky, low-res pixels
+								lon = Mathf.RoundToInt((float)lon * 512) / 512;
+								lat = Mathf.RoundToInt((float)lat * 256) / 256;
 							}
 
-							// Ensure full opacity for visual maps
-							baseColor.a = 255;
+							baseColor = SCANcontroller.controller.GetVisualPixel(body, lon, lat);
 
-							if (!colorMap)
+							if (!colorMap || !highResCovered)
 							{
 								baseColor = palette.ConvertToGrayscale(baseColor);
 							}
-						}
-						else
-						{
-							baseColor = unscanned;
 						}
 
 						break;

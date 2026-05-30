@@ -982,30 +982,30 @@ namespace SCANsat.SCAN_Unity
 					break;
 
 				case MainMapDisplayMode.Visual:
+
+					if (!SCANcontroller.controller.isVisualTextureLoaded(data.Body))
+					{
+						c = palette.lerp(palette.black, palette.white, UnityEngine.Random.value);
+						break;
+					}
+
 					bool highResCovered = SCANUtil.isCovered(ilon, scanline, data, SCANtype.VisualHiRes);
 					bool lowResCovered = SCANUtil.isCovered(ilon, scanline, data, SCANtype.VisualLoRes);
+
 					if (highResCovered || lowResCovered)
 					{
 						double lat = scanline - 90;
 						double lon = ilon - 180;
 
-						float fLat = ((float)lat + 90f) / 180f;
-						float fLon = ((float)lon + 270f) / 360f;
+						if (highResCovered || lowResCovered)
+						{
+							c = SCANcontroller.controller.GetVisualPixel(data.Body, lon, lat);
 
-						if (fLon < 0) { fLon += 1; }
-						if (fLon > 1) { fLon -= 1; }
-						fLon = 1 - fLon;
-
-						fLat = Mathf.Clamp01(fLat);
-						fLon = Mathf.Clamp01(fLon);
-
-						Texture2D readableScaledSpaceMap = SCANcontroller.controller.getVisualMapTexture(data.Body);
-
-						int ilon_tex = Mathf.RoundToInt(fLon * readableScaledSpaceMap.width);
-						int ilat_tex = Mathf.RoundToInt(fLat * readableScaledSpaceMap.height);
-
-						c = readableScaledSpaceMap.GetPixel(ilon_tex, ilat_tex);
-						c.a = 255;
+							if (!highResCovered)
+							{
+								c = palette.ConvertToGrayscale(c);  // Default to grayscale for low res
+							}
+						}
 
 						return c;
 					}

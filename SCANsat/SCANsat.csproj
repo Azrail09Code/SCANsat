@@ -16,6 +16,13 @@
     </KSPVersionFile>
   </ItemGroup>
   <ItemGroup>
+	<ModReference Include="KSPTextureLoader">
+	  <DLLPath>GameData/KSPTextureLoader/Plugins/KSPTextureLoader.dll</DLLPath>
+	  <CKANIdentifier>KSPTextureLoader</CKANIdentifier>
+      <KSPAssemblyVersion>1.0.34</KSPAssemblyVersion>
+	</ModReference>
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="KSPBuildTools" Version="1.1.1" />
     <PackageReference Include="KSPCommunityLib" Version="0.1.1" />
   </ItemGroup>
