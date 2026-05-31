@@ -956,6 +956,10 @@ namespace SCANsat.SCAN_Unity
 					}
 					else if (SCANUtil.isCovered(ilon, scanline, data, SCANtype.Altimetry))
 					{
+						if (data.TerrainConfig == null)
+						{
+							data.TerrainConfig = SCANcontroller.getTerrainNode(data.Body.name);
+						}
 						float val = data.HeightMapValue(data.Body.flightGlobalsIndex, ilon, scanline);
 						if (SCANUtil.isCovered(ilon, scanline, data, SCANtype.AltimetryHiRes))
 						{

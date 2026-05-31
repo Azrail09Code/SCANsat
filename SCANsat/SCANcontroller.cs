@@ -833,6 +833,7 @@ namespace SCANsat
 				{
 					ConfigNode node_body = new ConfigNode("Body");
 					SCANdata body_scan = body_data[body_name];
+					body_scan.TerrainConfig = getTerrainNode(body_name);
 					node_body.AddValue("Name", body_name);
 					node_body.AddValue("Disabled", body_scan.Disabled);
 					if (SCANmainMenuLoader.MechJebLoaded && SCAN_Settings_Config.Instance.MechJebTarget && SCAN_Settings_Config.Instance.MechJebTargetLoad)
@@ -2236,6 +2237,7 @@ namespace SCANsat
 			if (!body_data.Contains(VC.to.bodyName))
 			{
 				body_data.Add(VC.to.bodyName, new SCANdata(VC.to));
+				body_data[VC.to.bodyName].TerrainConfig = getTerrainNode(VC.to.bodyName);  // Force SCANdata to have correct terrain
 			}
 		}
 

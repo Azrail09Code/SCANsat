@@ -1014,6 +1014,11 @@ namespace SCANsat.SCAN_Map
 							else if (SCANUtil.isCovered(lon, lat, data, SCANtype.Altimetry))
 							{
 								projVal = terrainElevation(lon, lat, mapwidth, mapheight, big_heightmap, cache, data, out nowColor);
+								if (data.TerrainConfig == null)
+								{
+									data.TerrainConfig = SCANcontroller.getTerrainNode(data.Body.name);
+								}
+
 								if (useCustomRange)
 								{
 									baseColor = palette.heightToColor(projVal, nowColor, data.TerrainConfig, customMin, customMax, customRange, true);
