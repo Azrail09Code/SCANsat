@@ -31,6 +31,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Events;
 using Log = KSPCommunityLib.Logging.Log;
@@ -156,9 +157,13 @@ namespace SCANsat
 
 		/* Visual Map Texture Data */
 		private Dictionary<CelestialBody, Texture2D> readableScaledSpaceMaps = new Dictionary<CelestialBody, Texture2D>();
-		private Dictionary<CelestialBody, CPUTexture2D> mappableScaledSpaceMaps = new Dictionary<CelestialBody, CPUTexture2D>();
 		private CelestialBody bigMapBodyScaledSpace;
 		private CelestialBody zoomMapBodyScaledSpace;
+
+		/* Memory Mapped Data (requires SCANSAT_BODY_TEXTURES config) */
+		private Dictionary<CelestialBody, CPUTexture2D> memoryMappedHeightMaps = new Dictionary<CelestialBody, CPUTexture2D>();
+		private Dictionary<CelestialBody, CPUTexture2D> memoryMappedNormalMaps = new Dictionary<CelestialBody, CPUTexture2D>();
+		private Dictionary<CelestialBody, CPUTexture2D> memoryMappedVisualMaps = new Dictionary<CelestialBody, CPUTexture2D>();
 
 		private SCAN_UI_MainMap _mainMap;
 		private SCAN_UI_Instruments _instruments;
@@ -243,7 +248,7 @@ namespace SCANsat
 			}
 
 			// Check if a texture is present in either dictionary
-			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null || mappableScaledSpaceMaps.GetValueOrDefault(b) != null)
+			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null || memoryMappedVisualMaps.GetValueOrDefault(b) != null)
 			{
 				return true;
 			}
@@ -254,7 +259,7 @@ namespace SCANsat
 		public Color32 GetVisualPixel(CelestialBody b, double lon, double lat)
 		{
 			Texture2D cachedColorMap = readableScaledSpaceMaps.GetValueOrDefault(b);
-			CPUTexture2D mappedColorMap = mappableScaledSpaceMaps.GetValueOrDefault(b);
+			CPUTexture2D mappedColorMap = memoryMappedVisualMaps.GetValueOrDefault(b);
 
 			// If no textures are loaded, return static
 			if (cachedColorMap == null && mappedColorMap == null)
@@ -279,13 +284,49 @@ namespace SCANsat
 			if (mappedColorMap != null)
 			{
 				c = mappedColorMap.GetPixelBilinear(fLon, fLat);
+
+				// Attempt to load Normal map values
+				CPUTexture2D mappedNormalMap = memoryMappedNormalMaps.GetValueOrDefault(b);
+				if (mappedNormalMap != null) {
+					Color32 n = mappedNormalMap.GetPixelBilinear(fLon, fLat);
+					float lumOver = n.b / 255f;  // Base game KSP blue channel to store Y axis normal data
+
+					switch(mappedNormalMap.Format)
+					{
+						case TextureFormat.BC5:
+							lumOver = n.g / 255f;  // BC5 stores X in red and Y in green (Z not stored)
+							break;
+						case TextureFormat.DXT5:
+							lumOver = n.g / 255f;  // DXT5 stores X in alpha and Y in green (Z not stored)
+							break;
+						default:
+							break;
+					}
+
+					HslColor hslBase = palette.ConvertRgbToHsl(c);
+
+					double opacity = 0.8;
+					double lum = hslBase.L;
+
+					if (lum > 0.5d)
+					{
+						lum = (opacity * (1 - (1 - (2 * (lumOver - 0.5))) * (1 - lum))) + (1 - opacity) * lum;
+					}
+					else
+					{
+						lum = (opacity * (2 * lumOver * lum)) + (1 - opacity) * lum;
+					}
+
+					c = palette.ConvertHslToRgb(hslBase.H, hslBase.S, lum);
+				}
+				c.a = 255; // Ensure map is fully opaque regardless of source texture alpha
 			}
 			else
 			{
 				c = cachedColorMap.GetPixelBilinear(fLon, fLat);
+				c.a = 255; // Ensure map is fully opaque regardless of source texture alpha
 			}
 
-			c.a = 255; // Ensure map is fully opaque regardless of source texture alpha
 			return c;
 		}
 
@@ -1672,7 +1713,7 @@ namespace SCANsat
 		/// Caches visual textures (colour map)
 		void CacheVisualTexture(CelestialBody b, Material material, string colorMapTextureName, bool useMaterialForColorMap)
 		{
-			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null || mappableScaledSpaceMaps.GetValueOrDefault(b) != null)
+			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null || memoryMappedVisualMaps.GetValueOrDefault(b) != null)
 			{
 				return; // Already cached
 			}
@@ -1725,7 +1766,7 @@ namespace SCANsat
 					break;
 			}
 
-			if (mappableScaledSpaceMaps.GetValueOrDefault(b) != null)
+			if (memoryMappedVisualMaps.GetValueOrDefault(b) != null)
 			{
 				return; // Already cached
 			}
@@ -1741,14 +1782,45 @@ namespace SCANsat
 					if (bodyName == b.name)
 					{
 						string baseFolder = System.IO.Directory.GetParent(KSPUtil.ApplicationRootPath).FullName;
-						string colorMapCPUTextureName = (baseFolder + '/' + node.GetValue("colorMap")).Replace("\\", "/");
-						CPUTextureHandle colorMap = TextureLoader.LoadCPUTexture(colorMapCPUTextureName);
-						if (colorMap.IsError)
+
+						// Attempt to load heightMap
+						if (!memoryMappedHeightMaps.ContainsKey(b))
 						{
-							Log.Error($"[{b.name}] Visual Data path not loaded: {colorMapCPUTextureName}");
-							return;
+							string heightMapCPUTextureName = (baseFolder + '/' + node.GetValue("heightMap")).Replace("\\", "/");
+							CPUTextureHandle heightMap = TextureLoader.LoadCPUTexture(heightMapCPUTextureName);
+							if (heightMap.IsError)
+							{
+								Log.Error($"[{b.name}] Height Map Path not defined: {heightMapCPUTextureName}");
+								return;
+							}
+							memoryMappedHeightMaps.Add(b, heightMap.GetTexture());
 						}
-						mappableScaledSpaceMaps.Add(b, colorMap.GetTexture());
+
+						// Attempt to load normalMap
+						if (!memoryMappedNormalMaps.ContainsKey(b))
+						{
+							string normalMapCPUTextureName = (baseFolder + '/' + node.GetValue("normalMap")).Replace("\\", "/");
+							CPUTextureHandle normalMap = TextureLoader.LoadCPUTexture(normalMapCPUTextureName);
+							if (normalMap.IsError)
+							{
+								Log.Error($"[{b.name}] Normal Map Path not defined: {normalMapCPUTextureName}");
+								return;
+							}
+							memoryMappedNormalMaps.Add(b, normalMap.GetTexture());
+						}
+
+						// Attempt to load colorMap
+						if (!memoryMappedVisualMaps.ContainsKey(b))
+						{
+							string colorMapCPUTextureName = (baseFolder + '/' + node.GetValue("colorMap")).Replace("\\", "/");
+							CPUTextureHandle colorMap = TextureLoader.LoadCPUTexture(colorMapCPUTextureName);
+							if (colorMap.IsError)
+							{
+								Log.Error($"[{b.name}] Visual Data path not loaded: {colorMapCPUTextureName}");
+								return;
+							}
+							memoryMappedVisualMaps.Add(b, colorMap.GetTexture());
+						}
 						return;
 					}
 				}
@@ -1808,11 +1880,11 @@ namespace SCANsat
 				readableScaledSpaceMaps.Remove(b);
 			}
 
-			if (mappableScaledSpaceMaps.ContainsKey(b))
+			if (memoryMappedVisualMaps.ContainsKey(b))
 			{
 				// TODO: Do I need to destroy these textures as well?
-				mappableScaledSpaceMaps[b] = null;
-				mappableScaledSpaceMaps.Remove(b);
+				memoryMappedVisualMaps[b] = null;
+				memoryMappedVisualMaps.Remove(b);
 			}
 		}
 
