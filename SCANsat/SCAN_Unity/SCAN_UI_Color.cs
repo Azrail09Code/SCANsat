@@ -122,7 +122,7 @@ namespace SCANsat.SCAN_Unity
 				_resourceTransparency = currentResource.Transparency;
 			}
 
-			currentTerrain = SCANcontroller.getTerrainNode(_terrainPlanet);
+			currentTerrain = SCANUtil.getData(_terrainPlanet).TerrainConfig;
 
 			if (currentTerrain != null)
 			{
@@ -211,7 +211,7 @@ namespace SCANsat.SCAN_Unity
 
 				_terrainPlanet = body;
 
-				currentTerrain = SCANcontroller.getTerrainNode(body);
+				currentTerrain = SCANUtil.getData(body).TerrainConfig;
 
 				if (currentTerrain != null)
 				{

@@ -17,6 +17,7 @@ using SCANsat.SCAN_Data;
 using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
 
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace SCANsat.SCAN_Map
 {
@@ -100,65 +101,28 @@ namespace SCANsat.SCAN_Map
 			Color32[] pix = new Color32[256];
 
 			int count = biomes.Length;
-
 			int blockSize = (int)Math.Truncate(256 / (count * 1d));
 
-			int total = 0;
-
-			for (int i = 0; i < count; i++)
+			for (int biome_idx = 0; biome_idx < count; biome_idx++)
 			{
-				for (int j = 0; j < blockSize; j++)
+				int start = biome_idx * blockSize;
+				int end = biome_idx == count - 1 ? 256: start + blockSize;  // Ensure the last block fills to the end of the texture
+
+				for (int i = start; i < end; i++)
 				{
-					if (total >= 256)
-					{
-						break;
-					}
-
-					int current = i * blockSize + j;
-
 					if (stock && color)
 					{
-						pix[current] = SCANUtil.getBiomeDisplayColor(data.Body, i);
+						pix[i] = biomes[biome_idx].mapColor;
 					}
 					else if (color)
 					{
-						pix[current] = palette.lerp(SCANcontroller.controller.lowBiomeColor32, SCANcontroller.controller.highBiomeColor32, (float)((i * 1f) / (count * 1f)));
+						pix[i] = palette.lerp(SCANcontroller.controller.lowBiomeColor32, SCANcontroller.controller.highBiomeColor32, (float)((biome_idx * 1f) / (count * 1f)));
 					}
 					else
 					{
-						pix[current] = palette.lerp(palette.Black, palette.White, (float)(i * 1f) / (count * 1f));
+						pix[i] = palette.lerp(palette.Black, palette.White, (float)(biome_idx * 1f) / (count * 1f));
 					}
-
-					total++;
 				}
-			}
-
-			int remaining = 256 - count * blockSize;
-			int backCount = remaining;
-
-			for (int i = 0; i < remaining; i++)
-			{
-				if (total > 256 || backCount <= 0)
-				{
-					break;
-				}
-
-				if (SCAN_Settings_Config.Instance.BigMapStockBiomes && color)
-				{
-					pix[256 - backCount] = SCANUtil.getBiomeDisplayColor(data.Body, count - 1);
-				}
-				else if (color)
-				{
-					pix[256 - backCount] = palette.lerp(SCANcontroller.controller.lowBiomeColor32, SCANcontroller.controller.highBiomeColor32, (float)(((count - 1) * 1f) / (count * 1f)));
-				}
-				else
-				{
-					pix[256 - backCount] = palette.lerp(palette.Black, palette.White, (float)(((count - 1) * 1f) / (count * 1f)));
-				}
-
-				backCount--;
-
-				total++;
 			}
 
 			legend.SetPixels32(pix);

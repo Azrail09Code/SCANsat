@@ -1784,7 +1784,7 @@ namespace SCANsat.SCAN_Unity
 					case mapType.Biome:
 						if (body != null && body.BiomeMap != null && body.BiomeMap.Attributes != null)
 						{
-							return bigmap.MapLegend.getLegend(data, SCANcontroller.controller.bigMapColor, SCAN_Settings_Config.Instance.BigMapStockBiomes, body.BiomeMap.Attributes);
+							return bigmap.MapLegend.getLegend(data, SCANcontroller.controller.bigMapColor, SCAN_Settings_Config.Instance.BigMapStockBiomes, SCANUtil.GetOrBuildPalette(body));
 						}
 						else
 						{

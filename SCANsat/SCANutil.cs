@@ -850,10 +850,12 @@ namespace SCANsat
 			return true;
 		}
 
-		private static CBAttributeMapSO.MapAttribute[] GetOrBuildPalette(CelestialBody body)
+		public static CBAttributeMapSO.MapAttribute[] GetOrBuildPalette(CelestialBody body)
 		{
 			if (_scanBiomePaletteCache.TryGetValue(body.name, out var cached))
+			{
 				return cached;
+			}
 
 			var src = body.BiomeMap.Attributes;
 			if (!IsGrayscaleEncoded(src))
@@ -868,13 +870,9 @@ namespace SCANsat
 			var replacements = new CBAttributeMapSO.MapAttribute[src.Length];
 			for (int i = 0; i < src.Length; i++)
 			{
-				if (src[i] == null) continue;
-				var clone = new CBAttributeMapSO.MapAttribute
-				{
-					name = src[i].name,
-					value = src[i].value,
-					mapColor = Color.HSVToRGB((i * 0.61803398875f) % 1f, 1f, 1f)
-				};
+				if (src[i] == null) { continue; }
+				var clone = new CBAttributeMapSO.MapAttribute(src[i]);  // Copy all attributes
+				clone.mapColor = Color.HSVToRGB((i * 0.61803398875f) % 1f, 1f, 1f);
 				replacements[i] = clone;
 			}
 			_scanBiomePaletteCache[body.name] = replacements;
