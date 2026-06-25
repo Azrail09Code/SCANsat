@@ -101,12 +101,10 @@ namespace SCANsat.SCAN_Map
 			Color32[] pix = new Color32[256];
 
 			int count = biomes.Length;
-			int blockSize = (int)Math.Truncate(256 / (count * 1d));
-
 			for (int biome_idx = 0; biome_idx < count; biome_idx++)
 			{
-				int start = biome_idx * blockSize;
-				int end = biome_idx == count - 1 ? 256: start + blockSize;  // Ensure the last block fills to the end of the texture
+				int start = (int) Math.Round(biome_idx * 256 / (count * 1d));
+				int end = (int) Math.Round((biome_idx + 1) * 256 / (count * 1d));
 
 				for (int i = start; i < end; i++)
 				{
