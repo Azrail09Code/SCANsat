@@ -132,16 +132,13 @@ namespace SCANsat
 		/* Available resources for overlays; loaded from SCANsat configs; only loaded once */
 		private static DictionaryValueList<string, SCANresourceGlobal> masterResourceNodes = new DictionaryValueList<string, SCANresourceGlobal>();
 
-		/* Terrain height and color option containers loaded from SCANsat configs; only needs to be loaded once */
-		private static Dictionary<string, SCANterrainConfig> masterTerrainNodes = new Dictionary<string, SCANterrainConfig>();
-
 		/* List of resources currently loaded from resource addons */
 		private static List<string> loadedResources = new List<string>();
 
 		/* Primary SCANsat vessel dictionary; loaded every time */
 		public DictionaryValueList<Guid, SCANvessel> knownVessels = new DictionaryValueList<Guid, SCANvessel>();
 
-		/* Primary SCANdata dictionary; loaded every time*/
+		/* Primary SCANdata dictionary; loaded every time */
 		private DictionaryValueList<string, SCANdata> body_data = new DictionaryValueList<string, SCANdata>();
 
 		/* MechJeb Landing Target Integration */
@@ -330,80 +327,30 @@ namespace SCANsat
 			return c;
 		}
 
-		public static List<SCANterrainConfig> EncodeTerrainConfigs
+
+		public static List<SCANterrainConfig> EncodeTerrainConfigs()
 		{
-			get
+			List<SCANterrainConfig> configs = new List<SCANterrainConfig>();
+			
+			for (int i = 0; i < FlightGlobals.Bodies.Count; i++)
 			{
-				try
+				CelestialBody b = FlightGlobals.Bodies[i];
+
+				if (b == null)
 				{
-					return masterTerrainNodes.Values.ToList();
+					continue;
 				}
-				catch (Exception e)
+
+				SCANdata data = SCANUtil.getData(b);
+
+				if (data != null)
 				{
-					SCANUtil.SCANlog("Error while saving SCANsat altimetry config data: {0}", e);
-				}
-
-				return new List<SCANterrainConfig>();
-			}
-		}
-
-		public static void setMasterTerrainNodes(List<SCANterrainConfig> terrainConfigs)
-		{
-			masterTerrainNodes.Clear();
-			try
-			{
-				masterTerrainNodes = terrainConfigs.ToDictionary(a => a.Name, a => a);
-			}
-			catch (Exception e)
-			{
-				SCANUtil.SCANlog("Error while loading SCANsat terrain config settings: {0}", e);
-			}
-		}
-
-		public static void generateTerrainConfig(CelestialBody b)
-		{
-			if (b.pqsController == null)
-			{
-				SCANUtil.SCANlog($"[{b.name}] PQS Controller not loaded - no terrain data generated.");
-				return;
-			}
-
-			float? clamp = null;
-			if (b.ocean)
-			{
-				clamp = 0;
-			}
-
-			float newMin;
-			float newMax;
-
-			try
-			{
-				newMin = ((float)(b.pqsController.radiusMin - b.pqsController.radius)).Mathf_Round(-1);
-				newMax = ((float)(b.pqsController.radiusMax - b.pqsController.radius)).Mathf_Round(-1);
-				if (newMin == newMax)
-				{
-					throw new Exception("Gas Giant / Flat Body");  // Clamp altimetry if body is perfectly smooth / gas giant
+					configs.Add(data.TerrainConfig);
 				}
 			}
-			catch (Exception e)
-			{
-				SCANUtil.SCANlog($"[{b.name}] Error in calculating Max Height; using default value\n{e}");
-				newMin = SCANconfigLoader.SCANNode.DefaultMinHeightRange;
-				newMax = SCANconfigLoader.SCANNode.DefaultMaxHeightRange;
-			}
+		return configs;
+	}
 
-			addToTerrainConfigData(b.bodyName, new SCANterrainConfig(newMin, newMax, clamp, SCANUtil.PaletteLoader(SCANconfigLoader.SCANNode.DefaultPalette, 7), 7, false, false, b));
-		}
-
-		//public void regenerateTerrainConfig(CelestialBody b)
-		//{
-		//	if (b == null)
-		//	{
-		//		return;
-		//	}
-		//	addToTerrainConfigData(b.bodyName, generateTerrainConfig(b));
-		//}
 
 		public static void checkLoadedTerrainNodes()
 		{
@@ -416,27 +363,17 @@ namespace SCANsat
 					continue;
 				}
 
-				generateTerrainConfig(b);
+				SCANdata data = SCANUtil.getData(b.bodyName);
+				if (data == null)
+				{
+					SCANUtil.addToBodyData(b, new SCANdata(b));  // Generates terrain config on init
+				}
 			}
-		}
-
-		public static SCANterrainConfig getTerrainNode(string name)
-		{
-			if (masterTerrainNodes.ContainsKey(name))
-			{
-				return masterTerrainNodes[name];
-			}
-			else
-			{
-				SCANUtil.SCANlog("SCANsat terrain config [{0}] cannot be found in master terrain storage list", name);
-			}
-
-			return null;
 		}
 
 		public static void updateTerrainConfig(SCANterrainConfig t)
 		{
-			SCANterrainConfig update = getTerrainNode(t.Name);
+			SCANterrainConfig update = SCANUtil.getData(t.Name).TerrainConfig;
 			if (update != null)
 			{
 				update.MinTerrain = t.MinTerrain;
@@ -449,16 +386,23 @@ namespace SCANsat
 			}
 		}
 
-		public static void addToTerrainConfigData(string name, SCANterrainConfig data)
+		public static void DecodeTerrainConfigs(List<SCANterrainConfig> configs)
 		{
-			if (masterTerrainNodes.ContainsKey(name))
+			foreach (SCANterrainConfig config in configs)
 			{
-				Log.Warning($"[{name}] Terrain Config already stored in SCANterrain Data Dictionary");
-				updateTerrainConfig(data);
-				return;
-			}
+				if (config == null)
+				{
+					continue;
+				}
 
-			masterTerrainNodes.Add(name, data);
+				SCANdata data = SCANUtil.getData(config.Name);
+				if (data == null)
+				{
+					CelestialBody b = FlightGlobals.Bodies.FirstOrDefault(x => x.bodyName == config.Name);
+					SCANUtil.addToBodyData(b, new SCANdata(b));  // Add SCANdata if not present
+				}
+				updateTerrainConfig(config);
+			}
 		}
 
 		public static int MasterResourceCount
@@ -813,7 +757,6 @@ namespace SCANsat
 							}
 
 							data.Disabled = node_body.parse("Disabled", false);
-							data.TerrainConfig = getTerrainNode(body.bodyName);
 						}
 						catch (Exception e)
 						{
@@ -874,7 +817,6 @@ namespace SCANsat
 				{
 					ConfigNode node_body = new ConfigNode("Body");
 					SCANdata body_scan = body_data[body_name];
-					body_scan.TerrainConfig = getTerrainNode(body_name);
 					node_body.AddValue("Name", body_name);
 					node_body.AddValue("Disabled", body_scan.Disabled);
 					if (SCANmainMenuLoader.MechJebLoaded && SCAN_Settings_Config.Instance.MechJebTarget && SCAN_Settings_Config.Instance.MechJebTargetLoad)
@@ -2309,7 +2251,6 @@ namespace SCANsat
 			if (!body_data.Contains(VC.to.bodyName))
 			{
 				body_data.Add(VC.to.bodyName, new SCANdata(VC.to));
-				body_data[VC.to.bodyName].TerrainConfig = getTerrainNode(VC.to.bodyName);  // Force SCANdata to have correct terrain
 			}
 		}
 

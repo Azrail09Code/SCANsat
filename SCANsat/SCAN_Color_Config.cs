@@ -53,7 +53,7 @@ namespace SCANsat
 
 		public override void OnDecodeFromConfigNode()
 		{
-			SCANcontroller.setMasterTerrainNodes(SCANsat_Altimetry);
+			SCANcontroller.DecodeTerrainConfigs(SCANsat_Altimetry);
 			SCANcontroller.setMasterResourceNodes(SCANsat_Resources);
 		}
 
@@ -61,7 +61,7 @@ namespace SCANsat
 		{
 			SCANUtil.SCANlog("Saving SCANsat configuration file...");
 			SCANUtil.SCANlog("SCANcolors.cfg saved to ---> {0}", FilePath);
-			SCANsat_Altimetry = SCANcontroller.EncodeTerrainConfigs;
+			SCANsat_Altimetry = SCANcontroller.EncodeTerrainConfigs();
 			SCANsat_Resources = SCANcontroller.EncodeResourceConfigs;
 		}
 

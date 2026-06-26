@@ -267,6 +267,21 @@ namespace SCANsat
 		}
 
 		/// <summary>
+		/// For a given Celestial Body name this sets the SCANdata instance with the provided data.
+		/// </summary>
+		/// <param name="b">Celestial body (do not use displayName string)</param>
+		/// <returns>SCANdata instance for the given Celestial Body; null if none exists</returns>
+		public static void addToBodyData(CelestialBody b, SCANdata data)
+		{
+			if (SCANcontroller.controller == null)
+			{
+				return;
+			}
+
+			SCANcontroller.controller.addToBodyData(b, new SCANdata(data));
+		}
+
+		/// <summary>
 		/// Do SCANsat maps automatically update with the stock, instant-scan orbital surveys?
 		/// </summary>
 		/// <returns>Returns true if instant scan is enabled</returns>

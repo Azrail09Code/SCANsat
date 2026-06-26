@@ -1174,7 +1174,7 @@ namespace SCANsat.SCAN_Map
 					{
 						if (!SCANcontroller.controller.isVisualTextureLoaded(body))
 						{
-							baseColor = unscanned;
+							baseColor = palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
 							break;
 						}
 
@@ -1196,6 +1196,10 @@ namespace SCANsat.SCAN_Map
 							{
 								baseColor = palette.ConvertToGrayscale(baseColor);
 							}
+						}
+						else
+						{
+							baseColor = unscanned;
 						}
 
 						break;
