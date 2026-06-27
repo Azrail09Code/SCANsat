@@ -1963,18 +1963,7 @@ namespace SCANsat.SCAN_Unity
 		{
 			get
 			{
-				if (data == null)
-				{
-					return null;
-				}
-
-				string one = string.Format("|\n{0}", (((int)(SCANUtil.getTerrainConfig(data).MinTerrain / 10)) * 10).ToString("N0"));
-
-				string two = string.Format("|\n{0}", (((int)((SCANUtil.getTerrainConfig(data).MinTerrain + (SCANUtil.getTerrainConfig(data).TerrainRange / 2)) / 10)) * 10).ToString("N0"));
-
-				string three = string.Format("|\n{0}", (((int)(SCANUtil.getTerrainConfig(data).MaxTerrain / 10)) * 10).ToString("N0"));
-
-				return new List<string>(3) { one, two, three };
+				return SCANmapLegend.LegendLabels(SCANUtil.getTerrainConfig(body));
 			}
 		}
 

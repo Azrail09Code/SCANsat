@@ -103,8 +103,8 @@ namespace SCANsat.SCAN_Map
 			int count = biomes.Length;
 			for (int biome_idx = 0; biome_idx < count; biome_idx++)
 			{
-				int start = (int) Math.Round(biome_idx * 256 / (count * 1d));
-				int end = (int) Math.Round((biome_idx + 1) * 256 / (count * 1d));
+				int start = (int)Math.Round(biome_idx * 256 / (count * 1d));
+				int end = (int)Math.Round((biome_idx + 1) * 256 / (count * 1d));
 
 				for (int i = start; i < end; i++)
 				{
@@ -154,6 +154,40 @@ namespace SCANsat.SCAN_Map
 			t.SetPixels32(pix);
 			t.Apply();
 			return t;
+		}
+
+		/// For a given min and max terrain height, generate a set of label strings to 2 significant figures precision between max and min. Used in Big and Zoom maps to display total range.
+		/// </summary>
+		/// <param name="terrainMin">Value in Minimum Label</param>
+		/// <param name="terrainMax">Value in Maximum Label</param>
+		/// <returns>IList<string> containing the three legend labels to display.</returns>
+		public static IList<string> LegendLabels(double terrainMin, double terrainMax)
+		{
+			int digits = (int)Math.Floor(Math.Log10(terrainMax - terrainMin));
+			int round = (int)Math.Pow(10, digits - 1);
+
+			string one = string.Format("|\n{0}", (((int)Math.Round(terrainMin / round)) * round).ToString("N0"));
+
+			string two = string.Format("|\n{0}", (((int)Math.Round(((terrainMin + terrainMax) / 2) / round)) * round).ToString("N0"));
+
+			string three = string.Format("|\n{0}", (((int)Math.Round(terrainMax / round)) * round).ToString("N0"));
+
+			return new List<string>(3) { one, two, three };
+		}
+
+		/// <summary>
+		/// For a given SCANterrainConfig, generate a set of label strings to 3 significant figures precision. Used in Big and Zoom maps to display total range.
+		/// </summary>
+		/// <param name="config">SCANterrainConfig instance for a celestial body</param>
+		/// <returns>IList<string> containing the three legend labels to display.</returns>
+		public static IList<string> LegendLabels(SCANterrainConfig config)
+		{
+			if (config == null)
+			{
+				return null;
+			}
+
+			return LegendLabels(config.MinTerrain, config.MaxTerrain);
 		}
 	}
 }
