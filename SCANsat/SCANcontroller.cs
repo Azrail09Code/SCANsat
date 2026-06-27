@@ -132,6 +132,9 @@ namespace SCANsat
 		/* Available resources for overlays; loaded from SCANsat configs; only loaded once */
 		private static DictionaryValueList<string, SCANresourceGlobal> masterResourceNodes = new DictionaryValueList<string, SCANresourceGlobal>();
 
+		/* Terrain height and color option containers loaded from SCANsat configs; only needs to be loaded once */
+		private static Dictionary<string, SCANterrainConfig> masterTerrainNodes = new Dictionary<string, SCANterrainConfig>();
+
 		/* List of resources currently loaded from resource addons */
 		private static List<string> loadedResources = new List<string>();
 
@@ -327,29 +330,35 @@ namespace SCANsat
 			return c;
 		}
 
-
-		public static List<SCANterrainConfig> EncodeTerrainConfigs()
+		public static List<SCANterrainConfig> EncodeTerrainConfigs
 		{
-			List<SCANterrainConfig> configs = new List<SCANterrainConfig>();
-			
-			for (int i = 0; i < FlightGlobals.Bodies.Count; i++)
+			get
 			{
-				CelestialBody b = FlightGlobals.Bodies[i];
-
-				if (b == null)
+				try
 				{
-					continue;
+					return masterTerrainNodes.Values.ToList();
+				}
+				catch (Exception e)
+				{
+					SCANUtil.SCANlog("Error while saving SCANsat altimetry config data: {0}", e);
 				}
 
-				SCANdata data = SCANUtil.getData(b);
-
-				if (data != null)
-				{
-					configs.Add(data.TerrainConfig);
-				}
+				return new List<SCANterrainConfig>();
 			}
-		return configs;
-	}
+		}
+
+		public static void setMasterTerrainNodes(List<SCANterrainConfig> terrainConfigs)
+		{
+			masterTerrainNodes.Clear();
+			try
+			{
+				masterTerrainNodes = terrainConfigs.ToDictionary(a => a.Name, a => a);
+			}
+			catch (Exception e)
+			{
+				SCANUtil.SCANlog("Error while loading SCANsat terrain config settings: {0}", e);
+			}
+		}
 
 
 		public static void checkLoadedTerrainNodes()
@@ -363,17 +372,27 @@ namespace SCANsat
 					continue;
 				}
 
-				SCANdata data = SCANUtil.getData(b.bodyName);
-				if (data == null)
+				if (SCANUtil.getTerrainConfig(b) == null)
 				{
-					SCANUtil.addToBodyData(b, new SCANdata(b));  // Generates terrain config on init
+					SCANUtil.generateTerrainConfig(b);  // Sets the terrain config in the dictionary
 				}
 			}
 		}
 
+		public static SCANterrainConfig getTerrainNode(string name)
+		{
+			if (masterTerrainNodes.ContainsKey(name))
+			{
+				return masterTerrainNodes[name];
+			}
+
+			SCANUtil.SCANlog("SCANsat terrain config [{0}] cannot be found in master terrain storage list", name);
+			return null;
+		}
+
 		public static void updateTerrainConfig(SCANterrainConfig t)
 		{
-			SCANterrainConfig update = SCANUtil.getData(t.Name).TerrainConfig;
+			SCANterrainConfig update = getTerrainNode(t.Name);
 			if (update != null)
 			{
 				update.MinTerrain = t.MinTerrain;
@@ -386,23 +405,16 @@ namespace SCANsat
 			}
 		}
 
-		public static void DecodeTerrainConfigs(List<SCANterrainConfig> configs)
+		public static void addToTerrainConfigData(string name, SCANterrainConfig data)
 		{
-			foreach (SCANterrainConfig config in configs)
+			if (masterTerrainNodes.ContainsKey(name))
 			{
-				if (config == null)
-				{
-					continue;
-				}
-
-				SCANdata data = SCANUtil.getData(config.Name);
-				if (data == null)
-				{
-					CelestialBody b = FlightGlobals.Bodies.FirstOrDefault(x => x.bodyName == config.Name);
-					SCANUtil.addToBodyData(b, new SCANdata(b));  // Add SCANdata if not present
-				}
-				updateTerrainConfig(config);
+				Log.Warning($"[{name}] Terrain Config already stored in SCANterrain Data Dictionary");
+				updateTerrainConfig(data);
+				return;
 			}
+
+			masterTerrainNodes.Add(name, data);
 		}
 
 		public static int MasterResourceCount
@@ -827,19 +839,21 @@ namespace SCANsat
 							node_body.AddValue("LandingTarget", string.Format("{0:N4},{1:N4}", w.Latitude, w.Longitude));
 						}
 					}
-					if (body_scan.TerrainConfig != null)
+
+					SCANterrainConfig body_config = SCANUtil.getTerrainConfig(body_scan);
+					if (body_config != null)
 					{
-						node_body.AddValue("MinHeightRange", body_scan.TerrainConfig.MinTerrain / body_scan.TerrainConfig.MinHeightMultiplier);
-						node_body.AddValue("MaxHeightRange", body_scan.TerrainConfig.MaxTerrain / body_scan.TerrainConfig.MaxHeightMultiplier);
-						if (body_scan.TerrainConfig.ClampTerrain != null)
+						node_body.AddValue("MinHeightRange", body_config.MinTerrain / body_config.MinHeightMultiplier);
+						node_body.AddValue("MaxHeightRange", body_config.MaxTerrain / body_config.MaxHeightMultiplier);
+						if (body_config.ClampTerrain != null)
 						{
-							node_body.AddValue("ClampHeight", body_scan.TerrainConfig.ClampTerrain / body_scan.TerrainConfig.ClampHeightMultiplier);
+							node_body.AddValue("ClampHeight", body_config.ClampTerrain / body_config.ClampHeightMultiplier);
 						}
 
-						node_body.AddValue("PaletteName", body_scan.TerrainConfig.ColorPal.Name);
-						node_body.AddValue("PaletteSize", body_scan.TerrainConfig.PalSize);
-						node_body.AddValue("PaletteReverse", body_scan.TerrainConfig.PalRev);
-						node_body.AddValue("PaletteDiscrete", body_scan.TerrainConfig.PalDis);
+						node_body.AddValue("PaletteName", body_config.ColorPal.Name);
+						node_body.AddValue("PaletteSize", body_config.PalSize);
+						node_body.AddValue("PaletteReverse", body_config.PalRev);
+						node_body.AddValue("PaletteDiscrete", body_config.PalDis);
 					}
 					node_body.AddValue("Map", body_scan.shortSerialize());
 					node_progress.AddNode(node_body);
@@ -2252,17 +2266,12 @@ namespace SCANsat
 			{
 				body_data.Add(VC.to.bodyName, new SCANdata(VC.to));
 			}
-		}
 
-		private void setNewTerrainConfigValues(SCANterrainConfig terrain, float min, float max, float? clamp, SCANPalette c, int size, bool reverse, bool discrete)
-		{
-			terrain.MinTerrain = min * terrain.MinHeightMultiplier;
-			terrain.MaxTerrain = max * terrain.MaxHeightMultiplier;
-			terrain.ClampTerrain = clamp * terrain.ClampHeightMultiplier;
-			terrain.ColorPal = c;
-			terrain.PalSize = size;
-			terrain.PalRev = reverse;
-			terrain.PalDis = discrete;
+			// Generate terrain config if it doesn't exist
+			if (SCANUtil.getTerrainConfig(VC.to) == null)
+			{
+				SCANUtil.generateTerrainConfig(VC.to);
+			}
 		}
 
 		private string saveResources(SCANresourceGlobal resource)

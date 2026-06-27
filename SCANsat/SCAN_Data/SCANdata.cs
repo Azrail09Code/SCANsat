@@ -34,7 +34,6 @@ namespace SCANsat.SCAN_Data
 		/* MAP: state */
 		internal Int16[,] coverage;
 		private CelestialBody body;
-		private SCANterrainConfig terrainConfig;
 		private bool mapBuilding, overlayBuilding, controllerBuilding, built;
 
 		private float[,] tempHeightMap;
@@ -48,7 +47,6 @@ namespace SCANsat.SCAN_Data
 			body = b;
 
 			coverage = new Int16[360, 180];
-			terrainConfig = generateTerrainConfig(body);  // Generate correct config on initialization
 
 			if (heightMaps.ContainsKey(body.flightGlobalsIndex))
 			{
@@ -59,7 +57,6 @@ namespace SCANsat.SCAN_Data
 		public SCANdata(SCANdata copy)
 		{
 			coverage = copy.coverage;
-			terrainConfig = new SCANterrainConfig(copy.terrainConfig);
 
 			if (!heightMaps.ContainsKey(copy.body.flightGlobalsIndex))
 			{
@@ -105,12 +102,6 @@ namespace SCANsat.SCAN_Data
 		public CelestialBody Body
 		{
 			get { return body; }
-		}
-
-		public SCANterrainConfig TerrainConfig
-		{
-			get { return terrainConfig; }
-			internal set { terrainConfig = value; }
 		}
 
 		public bool Disabled
@@ -887,41 +878,6 @@ namespace SCANsat.SCAN_Data
 			xStart += width;
 		}
 
-		public static SCANterrainConfig generateTerrainConfig(CelestialBody b)
-		{
-			if (b.pqsController == null)
-			{
-				SCANUtil.SCANlog($"[{b.name}] PQS Controller not loaded - no terrain data generated.");
-				return null;
-			}
-
-			float? clamp = null;
-			if (b.ocean)
-			{
-				clamp = 0;
-			}
-
-			float newMin;
-			float newMax;
-
-			try
-			{
-				newMin = ((float)(b.pqsController.radiusMin - b.pqsController.radius)).Mathf_Round(-1);
-				newMax = ((float)(b.pqsController.radiusMax - b.pqsController.radius)).Mathf_Round(-1);
-				if (newMin == newMax)
-				{
-					throw new Exception("Gas Giant / Flat Body");  // Clamp altimetry if body is perfectly smooth / gas giant
-				}
-			}
-			catch (Exception e)
-			{
-				SCANUtil.SCANlog($"[{b.name}] Error in calculating Max Height; using default value\n{e}");
-				newMin = SCANconfigLoader.SCANNode.DefaultMinHeightRange;
-				newMax = SCANconfigLoader.SCANNode.DefaultMaxHeightRange;
-			}
-
-			return new SCANterrainConfig(newMin, newMax, clamp, SCANUtil.PaletteLoader(SCANconfigLoader.SCANNode.DefaultPalette, 7), 7, false, false, b);
-		}
 
 		#endregion
 

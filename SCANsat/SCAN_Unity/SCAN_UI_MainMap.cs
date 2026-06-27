@@ -959,11 +959,11 @@ namespace SCANsat.SCAN_Unity
 						float val = data.HeightMapValue(data.Body.flightGlobalsIndex, ilon, scanline);
 						if (SCANUtil.isCovered(ilon, scanline, data, SCANtype.AltimetryHiRes))
 						{
-							c = palette.heightToColor(val, Color, data.TerrainConfig);
+							c = palette.heightToColor(val, Color, SCANUtil.getTerrainConfig(data));
 						}
 						else
 						{
-							c = palette.heightToColor(val, false, data.TerrainConfig);
+							c = palette.heightToColor(val, false, SCANUtil.getTerrainConfig(data));
 						}
 						return c;
 					}

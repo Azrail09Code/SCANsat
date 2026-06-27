@@ -267,18 +267,81 @@ namespace SCANsat
 		}
 
 		/// <summary>
-		/// For a given Celestial Body name this sets the SCANdata instance with the provided data.
+		/// For a given Celestial Body, this returns the SCANterrainConfig instance if it exists in the SCANcontroller master dictionary; return is null if the SCANterrainConfig does not exist for that body (likely not generated or loaded properly), or if the SCANcontroller Scenario Module has not been loaded.
 		/// </summary>
-		/// <param name="b">Celestial body (do not use displayName string)</param>
-		/// <returns>SCANdata instance for the given Celestial Body; null if none exists</returns>
-		public static void addToBodyData(CelestialBody b, SCANdata data)
+		/// <param name="body">Instance of celestial body</param>
+		/// <returns>SCANterrainConfig instance for the given Celestial Body; null if none exists</returns>
+		public static SCANterrainConfig getTerrainConfig(CelestialBody body)
+		{
+			return getTerrainConfig(body.bodyName);
+		}
+
+		/// <summary>
+		/// For a given SCANdata instance of a celestial body, this returns the SCANterrainConfig instance if it exists in the SCANcontroller master dictionary; return is null if the SCANterrainConfig does not exist for that body (likely not generated or loaded properly), or if the SCANcontroller Scenario Module has not been loaded.
+		/// </summary>
+		/// <param name="data">SCANdata instance for a celestial body</param>
+		/// <returns>SCANterrainConfig instance for the given Celestial Body; null if none exists</returns>
+		public static SCANterrainConfig getTerrainConfig(SCANdata data)
+		{
+			return getTerrainConfig(data.Body.bodyName);
+		}
+
+		/// <summary>
+		/// For a given Celestial Body name, this returns the SCANterrainConfig instance if it exists in the SCANcontroller master dictionary; return is null if the SCANterrainConfig does not exist for that body (likely not generated or loaded properly), or if the SCANcontroller Scenario Module has not been loaded.
+		/// </summary>
+		/// <param name="BodyName">Name of celestial body (do not use displayName string)</param>
+		/// <returns>SCANterrainConfig instance for the given Celestial Body; null if none exists</returns>
+		public static SCANterrainConfig getTerrainConfig(string BodyName)
 		{
 			if (SCANcontroller.controller == null)
 			{
-				return;
+				return null;
 			}
 
-			SCANcontroller.controller.addToBodyData(b, new SCANdata(data));
+			return SCANcontroller.getTerrainNode(BodyName);
+		}
+
+		/// <summary>
+		/// Generate the default SCANterrainConfig for the provided body and set / update its entry in the masterTerrainNodes.
+		/// </summary>
+		/// <param name="body">CelestialBody instance to generate the SCANterrainConfig for</param>
+		/// <returns>SCANterrainConfig instance for the given Celestial Body</returns>
+		public static SCANterrainConfig generateTerrainConfig(CelestialBody b)
+		{
+			if (b.pqsController == null)
+			{
+				SCANUtil.SCANlog($"[{b.name}] PQS Controller not loaded - no terrain data generated.");
+				return null;
+			}
+
+			float? clamp = null;
+			if (b.ocean)
+			{
+				clamp = 0;
+			}
+
+			float newMin;
+			float newMax;
+
+			try
+			{
+				newMin = ((float)(b.pqsController.radiusMin - b.pqsController.radius)).Mathf_Round(-1);
+				newMax = ((float)(b.pqsController.radiusMax - b.pqsController.radius)).Mathf_Round(-1);
+				if (newMin == newMax)
+				{
+					throw new Exception("Gas Giant / Flat Body");  // Clamp altimetry if body is perfectly smooth / gas giant
+				}
+			}
+			catch (Exception e)
+			{
+				SCANlog($"[{b.name}] Error in calculating Max Height; using default value\n{e}");
+				newMin = SCANconfigLoader.SCANNode.DefaultMinHeightRange;
+				newMax = SCANconfigLoader.SCANNode.DefaultMaxHeightRange;
+			}
+
+			SCANterrainConfig config = new SCANterrainConfig(newMin, newMax, clamp, PaletteLoader(SCANconfigLoader.SCANNode.DefaultPalette, 7), 7, false, false, b);
+			SCANcontroller.addToTerrainConfigData(b.bodyName, config);  // Add to masterTerrainNodes dictionary in SCANcontroller
+			return config;
 		}
 
 		/// <summary>

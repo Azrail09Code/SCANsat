@@ -1017,11 +1017,11 @@ namespace SCANsat.SCAN_Map
 
 								if (useCustomRange)
 								{
-									baseColor = palette.heightToColor(projVal, nowColor, data.TerrainConfig, customMin, customMax, customRange, true);
+									baseColor = palette.heightToColor(projVal, nowColor, SCANUtil.getTerrainConfig(data), customMin, customMax, customRange, true);
 								}
 								else
 								{
-									baseColor = palette.heightToColor(projVal, nowColor, data.TerrainConfig);
+									baseColor = palette.heightToColor(projVal, nowColor, SCANUtil.getTerrainConfig(data));
 								}
 							}
 							else
@@ -1120,7 +1120,7 @@ namespace SCANsat.SCAN_Map
 											}
 											else
 											{
-												elevation = palette.lerp(palette.Black, palette.White, Mathf.Clamp(projVal + (-1f * data.TerrainConfig.MinTerrain), 0, data.TerrainConfig.TerrainRange) / data.TerrainConfig.TerrainRange);
+												elevation = palette.lerp(palette.Black, palette.White, Mathf.Clamp(projVal + (-1f * SCANUtil.getTerrainConfig(data).MinTerrain), 0, SCANUtil.getTerrainConfig(data).TerrainRange) / SCANUtil.getTerrainConfig(data).TerrainRange);
 											}
 										}
 									}
