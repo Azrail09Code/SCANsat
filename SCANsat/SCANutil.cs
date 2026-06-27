@@ -938,10 +938,8 @@ namespace SCANsat
 			var src = body.BiomeMap.Attributes;
 			if (!IsGrayscaleEncoded(src))
 			{
-				// Pack ships proper RGBA mapColors. Cache a null sentinel so we
-				// never re-detect, and never substitute.
-				_scanBiomePaletteCache[body.name] = null;
-				return null;
+				_scanBiomePaletteCache[body.name] = body.BiomeMap.Attributes;
+				return body.BiomeMap.Attributes;
 			}
 
 			// Build replacements with categorical hues via golden-ratio HSV
