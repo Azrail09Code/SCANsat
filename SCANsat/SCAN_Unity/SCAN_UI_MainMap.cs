@@ -999,7 +999,7 @@ namespace SCANsat.SCAN_Unity
 
 						if (highResCovered || lowResCovered)
 						{
-							c = SCANcontroller.controller.GetVisualPixel(data.Body, lon, lat);
+							c = SCANcontroller.controller.GetShadedVisualPixel(data.Body, lon, lat);
 
 							if (!highResCovered)
 							{

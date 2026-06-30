@@ -15,12 +15,9 @@
 using Contracts;
 using FinePrint.Contracts;
 using FinePrint.Contracts.Parameters;
-using FinePrint.Utilities;
-using KSPCommunityLib.Logging;
 using KSPTextureLoader;
 using SCANsat.SCAN_Data;
 using SCANsat.SCAN_Map;
-using SCANsat.SCAN_Palettes;
 using SCANsat.SCAN_Platform.Extensions.ConfigNodes;
 using SCANsat.SCAN_Reflection;
 using SCANsat.SCAN_Toolbar;
@@ -31,7 +28,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using UnityEngine;
 using UnityEngine.Events;
 using Log = KSPCommunityLib.Logging.Log;
@@ -156,7 +152,7 @@ namespace SCANsat
 		private CelestialBody zoomMapBodyVisual;
 
 		/* Visual Map Texture Data */
-		private Dictionary<CelestialBody, Texture2D> readableScaledSpaceMaps = new Dictionary<CelestialBody, Texture2D>();
+		private Dictionary<CelestialBody, Texture2D> cachedVisualMaps = new Dictionary<CelestialBody, Texture2D>();
 		private CelestialBody bigMapBodyScaledSpace;
 		private CelestialBody zoomMapBodyScaledSpace;
 
@@ -248,7 +244,7 @@ namespace SCANsat
 			}
 
 			// Check if a texture is present in either dictionary
-			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null || memoryMappedVisualMaps.GetValueOrDefault(b) != null)
+			if (cachedVisualMaps.GetValueOrDefault(b) != null || memoryMappedVisualMaps.GetValueOrDefault(b) != null)
 			{
 				return true;
 			}
@@ -256,19 +252,9 @@ namespace SCANsat
 			return false;
 		}
 
-		public Color32 GetVisualPixel(CelestialBody b, double lon, double lat)
+
+		public Color32 GetShadedVisualPixel(CelestialBody b, double lon, double lat)
 		{
-			Texture2D cachedColorMap = readableScaledSpaceMaps.GetValueOrDefault(b);
-			CPUTexture2D mappedColorMap = memoryMappedVisualMaps.GetValueOrDefault(b);
-
-			// If no textures are loaded, return static
-			if (cachedColorMap == null && mappedColorMap == null)
-			{
-				return palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
-			}
-
-			// Using doubles because Unity floats apparently default to double and this is faster to just avoid that
-			Color32 c = palette.Grey;
 
 			float fLat = ((float)lat + 90f) / 180f;
 			float fLon = ((float)lon + 270f) / 360f;
@@ -280,53 +266,66 @@ namespace SCANsat
 			fLat = Mathf.Clamp01(fLat);
 			fLon = Mathf.Clamp01(fLon);
 
+			Color32 c = palette.Grey;
+			double lumOver = 0.5;
 
+			CPUTexture2D mappedColorMap = memoryMappedVisualMaps.GetValueOrDefault(b);
+			Texture2D cachedColorMap = cachedVisualMaps.GetValueOrDefault(b);
+
+			// If no textures are loaded, return static
 			if (mappedColorMap != null)
 			{
 				c = mappedColorMap.GetPixelBilinear(fLon, fLat);
-
-				// Attempt to load Normal map values
-				CPUTexture2D mappedNormalMap = memoryMappedNormalMaps.GetValueOrDefault(b);
-				if (mappedNormalMap != null) {
-					Color32 n = mappedNormalMap.GetPixelBilinear(fLon, fLat);
-					float lumOver = n.b / 255f;  // Base game KSP blue channel to store Y axis normal data
-
-					switch(mappedNormalMap.Format)
-					{
-						case TextureFormat.BC5:
-							lumOver = n.g / 255f;  // BC5 stores X in red and Y in green (Z not stored)
-							break;
-						case TextureFormat.DXT5:
-							lumOver = n.g / 255f;  // DXT5 stores X in alpha and Y in green (Z not stored)
-							break;
-						default:
-							break;
-					}
-
-					HslColor hslBase = palette.ConvertRgbToHsl(c);
-
-					double opacity = 0.8;
-					double lum = hslBase.L;
-
-					if (lum > 0.5d)
-					{
-						lum = (opacity * (1 - (1 - (2 * (lumOver - 0.5))) * (1 - lum))) + (1 - opacity) * lum;
-					}
-					else
-					{
-						lum = (opacity * (2 * lumOver * lum)) + (1 - opacity) * lum;
-					}
-
-					c = palette.ConvertHslToRgb(hslBase.H, hslBase.S, lum);
-				}
-				c.a = 255; // Ensure map is fully opaque regardless of source texture alpha
+			}
+			else if (cachedColorMap != null)
+			{
+				c = cachedColorMap.GetPixelBilinear(fLon, fLat);
+				lumOver = c.a / 255f;  // Use alpha channel to store Y axis normal data for cached textures
 			}
 			else
 			{
-				c = cachedColorMap.GetPixelBilinear(fLon, fLat);
-				c.a = 255; // Ensure map is fully opaque regardless of source texture alpha
+				return palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
 			}
 
+			c.a = 255; // Ensure map is fully opaque regardless of source texture alpha
+
+			// Attempt to load Normal map values
+			CPUTexture2D mappedNormalMap = memoryMappedNormalMaps.GetValueOrDefault(b);
+			if (mappedNormalMap != null)
+			{
+				Color32 n = mappedNormalMap.GetPixelBilinear(fLon, fLat);
+				// Extract the Y channel from the normal map and normalize to range [0, 1]
+				lumOver = n.b / 255f;  // Base game KSP blue channel to store Y axis normal data
+
+				switch (mappedNormalMap.Format)
+				{
+					case TextureFormat.BC5:
+						lumOver = n.g / 255f;  // BC5 stores X in red and Y in green (Z not stored)
+						break;
+					case TextureFormat.DXT5:
+						lumOver = n.g / 255f;  // DXT5 stores X in alpha and Y in green (Z not stored)
+						break;
+					default:
+						break;
+				}
+			}
+
+			HslColor hslBase = palette.ConvertRgbToHsl(c);
+
+			double opacity = 0.8;
+			double lum = hslBase.L;
+
+			if (lum > 0.5d)
+			{
+				lum = (opacity * (1 - (1 - (2 * (lumOver - 0.5))) * (1 - lum))) + (1 - opacity) * lum;
+				lum = (opacity * lum) + (1 - opacity) * lum;
+			}
+			else
+			{
+				lum = (opacity * (2 * lumOver * lum)) + (1 - opacity) * lum;
+			}
+
+			c = palette.ConvertHslToRgb(hslBase.H, hslBase.S, lum);
 			return c;
 		}
 
@@ -1618,10 +1617,11 @@ namespace SCANsat
 
 		}
 
-		void GetVisualMapTexturesForBody(CelestialBody b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName)
+		void GetVisualMapTexturesForBody(CelestialBody b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName, out string normalMapTextureName)
 		{
 			material = null;
 			colorMapTextureName = null;
+			normalMapTextureName = null;
 			useMaterialForColorMap = true;
 
 			if (b.scaledBody == null)
@@ -1642,6 +1642,7 @@ namespace SCANsat
 			if (shaderName == "Terrain/Gas Giant")
 			{
 				colorMapTextureName = "_DetailCloudPatternTexture";
+				normalMapTextureName = "_NormalMap";
 				return;
 			}
 			// HapkeScaled is the Sol shader which is also a Parallax-dependent instance
@@ -1654,6 +1655,7 @@ namespace SCANsat
 				string contains_cube = material.HasProperty("_ColorCube") ? "_ColorCube" : null;
 				SCANUtil.SCANdebugLog($"[{b.name}] Material uses Parallax and contains: {contains_main}, {contains_map}, {contains_cube}.");
 				colorMapTextureName = "_ColorMap";
+				normalMapTextureName = "_BumpMap";
 				return;
 			}
 			else if (material.HasProperty("_MainTex"))
@@ -1664,17 +1666,27 @@ namespace SCANsat
 			{
 				colorMapTextureName = "_ColorMap";
 			}
+
+			if (material.HasProperty("_BumpMap"))
+			{
+				normalMapTextureName = "_BumpMap";
+			}
+			else if (material.HasProperty("_NormalMap"))
+			{
+				normalMapTextureName = "_NormalMap";
+			}
 		}
 
 		/// Caches visual textures (colour map)
-		void CacheVisualTexture(CelestialBody b, Material material, string colorMapTextureName, bool useMaterialForColorMap)
+		void CacheVisualTexture(CelestialBody b, Material material, string colorMapTextureName, string normalMapTextureName, bool useMaterialForColorMap)
 		{
-			if (readableScaledSpaceMaps.GetValueOrDefault(b) != null || memoryMappedVisualMaps.GetValueOrDefault(b) != null)
+			if (cachedVisualMaps.GetValueOrDefault(b) != null || memoryMappedVisualMaps.GetValueOrDefault(b) != null)
 			{
 				return; // Already cached
 			}
 
 			Texture2D colorMap = null;
+			Texture2D normalMap = null;
 
 			try
 			{
@@ -1685,13 +1697,50 @@ namespace SCANsat
 					if (sourceColorTexture != null)
 					{
 						colorMap = sourceColorTexture.isReadable ? sourceColorTexture : readableTexture(sourceColorTexture, useMaterialForColorMap ? material : null);
-						readableScaledSpaceMaps.Add(b, colorMap);
 					}
 					else
 					{
 						Log.Error($"GetTexture returned a null texture for body {b.name}, material {material.name} and texture name {colorMapTextureName}");
 						return;
 					}
+				}
+
+				if (normalMapTextureName == null)
+				{
+					cachedVisualMaps.Add(b, colorMap);
+					return;  // No normal map, just cache the color map
+				}
+
+				var sourceNormalTexture = material.GetTexture(normalMapTextureName) as Texture2D;
+				if (sourceNormalTexture != null)
+				{
+					normalMap = sourceNormalTexture.isReadable ? sourceNormalTexture : readableTexture(sourceNormalTexture, null);
+
+					// Get pixel data
+					Color32[] colorPixels = colorMap.GetPixels32();
+					// Merge: Keep RGB from colorPixels, keep A from alphaPixels
+					Color32[] mergedPixels = new Color32[colorPixels.Length];
+
+					// Take the b channel for RGBA textures and g channel for BC5 and DXT5 and shove in alpha of colour
+					for (int i = 0; i < colorPixels.Length; i++)
+					{
+						float u = (float)(i % colorMap.width) / (colorMap.width - 1);
+						float v = (float)(i / colorMap.width) / (colorMap.height - 1);
+						Color32 visualPixel = colorMap.GetPixelBilinear(u, v);
+						Color32 normalPixel = normalMap.GetPixelBilinear(u, v);
+						mergedPixels[i] = new Color32(
+							visualPixel.r,
+							visualPixel.g,
+							visualPixel.b,
+							normalMap.format == TextureFormat.BC5 || normalMap.format == TextureFormat.DXT5 ? normalPixel.g : normalPixel.b
+						);
+					}
+
+					//// Update the existing texture instance with the merged pixel data
+					Texture2D combinedTexture = new Texture2D(colorMap.width, colorMap.height);
+					combinedTexture.SetPixels32(mergedPixels);
+					combinedTexture.Apply();
+					cachedVisualMaps.Add(b, combinedTexture);
 				}
 			}
 			catch (Exception e)
@@ -1782,7 +1831,7 @@ namespace SCANsat
 				}
 			}
 
-			GetVisualMapTexturesForBody(b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName);
+			GetVisualMapTexturesForBody(b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName, out string normalMapTextureName);
 
 			if (material == null)
 			{
@@ -1791,7 +1840,7 @@ namespace SCANsat
 			else
 			{
 				// Load color map
-				CacheVisualTexture(b, material, colorMapTextureName, useMaterialForColorMap);
+				CacheVisualTexture(b, material, colorMapTextureName, normalMapTextureName, useMaterialForColorMap);
 			}
 		}
 
@@ -1829,11 +1878,11 @@ namespace SCANsat
 					break;
 			}
 
-			if (readableScaledSpaceMaps.ContainsKey(b))
+			if (cachedVisualMaps.ContainsKey(b))
 			{
-				GameObject.Destroy(readableScaledSpaceMaps[b]);
-				readableScaledSpaceMaps[b] = null;
-				readableScaledSpaceMaps.Remove(b);
+				GameObject.Destroy(cachedVisualMaps[b]);
+				cachedVisualMaps[b] = null;
+				cachedVisualMaps.Remove(b);
 			}
 
 			if (memoryMappedVisualMaps.ContainsKey(b))

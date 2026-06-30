@@ -1190,7 +1190,7 @@ namespace SCANsat.SCAN_Map
 								lat = Mathf.RoundToInt((float)lat * 256) / 256;
 							}
 
-							baseColor = SCANcontroller.controller.GetVisualPixel(body, lon, lat);
+							baseColor = SCANcontroller.controller.GetShadedVisualPixel(body, lon, lat);
 
 							if (!colorMap || !highResCovered)
 							{
