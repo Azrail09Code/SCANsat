@@ -201,6 +201,11 @@ namespace SCANsat.SCAN_Unity
 		{
 			_isVisible = false;
 
+			// Free the readable ScaledSpace copy on window close (only present if this map was
+			// in Visual mode); the shared-body guard keeps it alive if the big map still shows it.
+			if (spotmap != null && SCANcontroller.controller != null)
+				SCANcontroller.controller.UnloadVisualMapTexture(spotmap.Body, mapSource.ZoomMap);
+
 			if (uiElement == null)
 			{
 				return;

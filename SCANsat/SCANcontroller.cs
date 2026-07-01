@@ -1185,6 +1185,25 @@ namespace SCANsat
 					unloadPQS(b);
 				}
 			}
+
+			// Release the readable ScaledSpace copies - they otherwise leak if the scene changes
+			// while a Visual map is open (window Close() never runs) - and drop the static
+			// height-map cache, which otherwise persists for the whole process.
+			foreach (var t in readableScaledSpaceMaps.Values)
+			{
+				if (t != null)
+					GameObject.Destroy(t);
+			}
+			readableScaledSpaceMaps.Clear();
+
+			foreach (var t in readableScaledSpaceNormalMaps.Values)
+			{
+				if (t != null)
+					GameObject.Destroy(t);
+			}
+			readableScaledSpaceNormalMaps.Clear();
+
+			SCANdata.ClearHeightMaps();
 		}
 
 		private void watcher(float sci, ScienceSubject sub, ProtoVessel v, bool b)
@@ -1664,9 +1683,18 @@ namespace SCANsat
 				{
 					Log.Error($"GetTexture returned a null texture for body {b.name}, material {material.name} and texture name {textureName}");
 				}
+				else if (sourceTexture.width <= 1 || sourceTexture.height <= 1)
+				{
+					// On-demand ScaledSpace not loaded yet (1x1 placeholder). Skip caching so a
+					// later call - after loadOnDemandScaledSpace - picks up the real texture,
+					// rather than permanently caching the placeholder.
+				}
 				else
 				{
-					var colorMap = sourceTexture.isReadable ? sourceTexture : readableTexture(sourceTexture, useMaterial ? material : null);
+					// Always store a copy we own. Caching the source texture directly (when it
+					// happens to be readable) means UnloadVisualMapTexture's Destroy would destroy
+					// the body's real ScaledSpace texture. readableTexture also downsamples it.
+					var colorMap = readableTexture(sourceTexture, useMaterial ? material : null);
 					cache.Add(b, colorMap);
 				}
 			}
@@ -1763,9 +1791,25 @@ namespace SCANsat
 				return null;
 			}
 
-			Texture2D readable = new Texture2D(tex.width, tex.height);
+			// Cap the copied resolution. The Visual map is <=1440px wide and sampled bilinearly,
+			// so a native-resolution copy of an RSS 4K-8K ScaledSpace texture is pure waste
+			// (~180 MB each). Scale by the limiting dimension to preserve aspect ratio, and drop
+			// mipmaps - a lookup texture never needs a mip chain. The Blit does the GPU downscale.
+			int cap = SCAN_Settings_Config.Instance.VisibleMapMaxResolution;
+			if (cap < 1)
+				cap = 1;
 
-			var rt = RenderTexture.GetTemporary(tex.width, tex.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB, 1);
+			int capW = cap;
+			int capH = Mathf.Max(1, cap / 2);
+
+			float scale = Mathf.Min(1f, Mathf.Min((float)capW / tex.width, (float)capH / tex.height));
+
+			int tw = Mathf.Max(1, Mathf.RoundToInt(tex.width * scale));
+			int th = Mathf.Max(1, Mathf.RoundToInt(tex.height * scale));
+
+			Texture2D readable = new Texture2D(tw, th, TextureFormat.RGBA32, false);
+
+			var rt = RenderTexture.GetTemporary(tw, th, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB, 1);
 
 			if (mat != null)
 			{
@@ -1778,7 +1822,7 @@ namespace SCANsat
 
 			RenderTexture.active = rt;
 
-			readable.ReadPixels(new Rect(0, 0, tex.width, tex.height), 0, 0);
+			readable.ReadPixels(new Rect(0, 0, tw, th), 0, 0);
 
 			RenderTexture.active = null;
 			RenderTexture.ReleaseTemporary(rt);

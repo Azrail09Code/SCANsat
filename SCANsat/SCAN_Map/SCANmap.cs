@@ -471,6 +471,7 @@ namespace SCANsat.SCAN_Map
 			{
 				if (mapwidth != map.width || mapheight != map.height)
 				{
+					UnityEngine.Object.Destroy(map);
 					map = null;
 				}
 			}
@@ -512,6 +513,8 @@ namespace SCANsat.SCAN_Map
 			stopLine = mapheight - 1;
 			/* big map caching */
 			big_heightmap = new float[mapwidth, mapheight];
+			if (map != null)
+				UnityEngine.Object.Destroy(map);
 			map = null;
 			resetMap(resourceActive);
 		}
@@ -639,13 +642,15 @@ namespace SCANsat.SCAN_Map
 				SCANcontroller.controller.UnloadVisualMapTexture(body, mSource);
 				body = b;
 				SCANcontroller.controller.loadOnDemandScaledSpace(body, mSource);
-				SCANcontroller.controller.LoadVisualMapTexture_Renamed(body, mSource);
 			}
 			else
 			{
 				SCANcontroller.controller.loadOnDemandScaledSpace(body, mSource);
-				SCANcontroller.controller.LoadVisualMapTexture_Renamed(body, mSource);
 			}
+
+			// The readable ScaledSpace copy is only consumed by the Visual map mode and is
+			// very large under RSS (4K-8K bodies); load it lazily and only for that mode.
+			refreshVisualMapTexture();
 
 			data = SCANUtil.getData(body);
 
@@ -672,6 +677,23 @@ namespace SCANsat.SCAN_Map
 					resource.CurrentBodyConfig(body.bodyName);
 				}
 			}
+		}
+
+		/// <summary>
+		/// The readable ScaledSpace color/normal copies (SCANcontroller.readableScaledSpaceMaps)
+		/// are only sampled by the Visual map mode. Load them when this map is in Visual mode and
+		/// release them otherwise, so Altimetry/Slope/Biome maps never pay the cost - which under
+		/// RSS is hundreds of MB per body.
+		/// </summary>
+		private void refreshVisualMapTexture()
+		{
+			if (body == null || SCANcontroller.controller == null)
+				return;
+
+			if (mType == mapType.Visual)
+				SCANcontroller.controller.LoadVisualMapTexture_Renamed(body, mSource);
+			else
+				SCANcontroller.controller.UnloadVisualMapTexture(body, mSource);
 		}
 
 		public void setCustomRange(float min, float max, float rMin, float rMax)
@@ -761,6 +783,10 @@ namespace SCANsat.SCAN_Map
 
 				gamma = Math.Abs(sunLatCenter) < 0.55 ? 100 : Math.Tan(Mathf.Deg2Rad * (90 - Math.Abs(sunLatCenter)));
 			}
+
+			// mType is set (via MType or the resetMap(mode,...) overload) before every call
+			// here, so this covers map-type switches that don't go through setBody.
+			refreshVisualMapTexture();
 		}
 
 		public void resetMap(mapType mode, bool Cache, bool resourceOn, bool setRes = true)
