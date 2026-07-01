@@ -761,7 +761,7 @@ namespace SCANsat.SCAN_Unity
 			if (updateMap)
 			{
 				updateMap = false;
-				uiElement.UpdateMapTexture(spotmap.Map);
+				uiElement.UpdateMapTexture(spotmap.DisplayTexture);
 			}
 		}
 

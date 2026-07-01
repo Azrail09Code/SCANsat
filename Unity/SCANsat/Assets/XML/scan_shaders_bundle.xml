@@ -5,6 +5,7 @@
   <Assets>
     <Asset Name="Hidden/Edge Detect X" Path="Assets/Shaders/EdgeDetectX.shader" Type="Shader" Url="Shaders/EdgeDetectX" AutoLoad="false" />
     <Asset Name="Hidden/Grayscale Effect" Path="Assets/Shaders/GrayscaleEffect.shader" Type="Shader" Url="Shaders/GrayscaleEffect" AutoLoad="false" />
+    <Asset Name="Hidden/SCANsat/VisualComposite" Path="Assets/Shaders/SCANVisualComposite.shader" Type="Shader" Url="Shaders/SCANVisualComposite" AutoLoad="false" />
   </Assets>
   <Dependencies />
 </KSPBundleDefinition>

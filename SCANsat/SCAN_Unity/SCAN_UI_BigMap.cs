@@ -623,7 +623,7 @@ namespace SCANsat.SCAN_Unity
 			if (updateMap)
 			{
 				updateMap = false;
-				uiElement.UpdateMapTexture(bigmap.Map);
+				uiElement.UpdateMapTexture(bigmap.DisplayTexture);
 
 				if (OrbitToggle && ShowOrbit && bigmap.Projection != MapProjection.Polar && vessel.orbit.PeA > 0)
 				{

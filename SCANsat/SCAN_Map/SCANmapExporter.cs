@@ -54,7 +54,33 @@ namespace SCANsat.SCAN_Map
 				mode += "-grey";
 			}
 
-			string baseFileName = string.Format("{0}_{1}_{2}x{3}", map.Body.bodyName, mode, map.Map.width, map.Map.height);
+			// GPU-rendered Visual maps live in a RenderTexture; read it back into a Texture2D for
+			// EncodeToPNG (which is Texture2D-only). CPU-rendered maps use map.Map directly.
+			Texture2D exportTexture = map.Map;
+			bool tempExportTexture = false;
+
+			if (map.GpuRendered && map.VisualRenderTexture != null)
+			{
+				RenderTexture rt = map.VisualRenderTexture;
+				RenderTexture prev = RenderTexture.active;
+				RenderTexture.active = rt;
+				exportTexture = new Texture2D(rt.width, rt.height, TextureFormat.ARGB32, false);
+				exportTexture.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+				exportTexture.Apply();
+				RenderTexture.active = prev;
+				tempExportTexture = true;
+			}
+
+			if (exportTexture == null)
+			{
+				exporting = false;
+				return;
+			}
+
+			int exportWidth = exportTexture.width;
+			int exportHeight = exportTexture.height;
+
+			string baseFileName = string.Format("{0}_{1}_{2}x{3}", map.Body.bodyName, mode, exportWidth, exportHeight);
 
 			if (map.Projection != MapProjection.Rectangular)
 			{
@@ -67,11 +93,14 @@ namespace SCANsat.SCAN_Map
 
 			string fullPath = Path.Combine(path, filename);
 
-			File.WriteAllBytes(fullPath, map.Map.EncodeToPNG());
+			File.WriteAllBytes(fullPath, exportTexture.EncodeToPNG());
+
+			if (tempExportTexture)
+				UnityEngine.Object.Destroy(exportTexture);
 
 			ScreenMessages.PostScreenMessage("SCANsat Map saved: GameData/SCANsat/PluginData/" + filename, 8, ScreenMessageStyle.UPPER_CENTER);
 
-			SCANUtil.SCANlog("Map of [{0}] saved\nMap Size: {1} X {2}\nMinimum Altitude: {3:F0}m; Maximum Altitude: {4:F0}m\nPixel Width At Equator: {5:F6}m", map.Body.displayName.LocalizeBodyName(), map.Map.width, map.Map.height, data.TerrainConfig.MinTerrain, data.TerrainConfig.MaxTerrain, (map.Body.Radius * 2 * Math.PI) / (map.Map.width * 1f));
+			SCANUtil.SCANlog("Map of [{0}] saved\nMap Size: {1} X {2}\nMinimum Altitude: {3:F0}m; Maximum Altitude: {4:F0}m\nPixel Width At Equator: {5:F6}m", map.Body.displayName.LocalizeBodyName(), exportWidth, exportHeight, data.TerrainConfig.MinTerrain, data.TerrainConfig.MaxTerrain, (map.Body.Radius * 2 * Math.PI) / (exportWidth * 1f));
 
 			if (SCAN_Settings_Config.Instance.ExportCSV && map.MType == mapType.Altimetry)
 			{

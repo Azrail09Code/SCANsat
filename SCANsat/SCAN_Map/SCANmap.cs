@@ -18,6 +18,7 @@ using UnityEngine;
 using SCANsat.SCAN_Platform.Palettes;
 using SCANsat.SCAN_Data;
 using SCANsat.SCAN_UI.UI_Framework;
+using SCANsat.SCAN_Unity;
 using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
 
 namespace SCANsat.SCAN_Map
@@ -112,6 +113,24 @@ namespace SCANsat.SCAN_Map
 		{
 			get { return map; }
 			internal set { map = value; }
+		}
+
+		// The texture to display. A GPU-rendered Visual map is a RenderTexture (accepted by
+		// RawImage.texture / Graphics.Blit); otherwise the CPU-built Texture2D. Use this for
+		// on-screen display; use Map (Texture2D) for CPU readback such as PNG export.
+		public Texture DisplayTexture
+		{
+			get { return gpuRendered && visualRenderTex != null ? (Texture)visualRenderTex : (Texture)map; }
+		}
+
+		public bool GpuRendered
+		{
+			get { return gpuRendered; }
+		}
+
+		public RenderTexture VisualRenderTexture
+		{
+			get { return visualRenderTex; }
 		}
 
 		public CelestialBody Body
@@ -631,6 +650,14 @@ namespace SCANsat.SCAN_Map
 		private bool terminator;
 		private float mapRedlineDraw = 10;
 
+		/* GPU Visual-mode compositing: renders the Visual map on the GPU sampling the body's
+		   original ScaledSpace textures, so no readable CPU copy is needed. Dormant until the
+		   composite shader is present in the bundle; otherwise the CPU renderer below runs. */
+		private RenderTexture visualRenderTex;
+		private Material compositeMaterial;
+		private Texture2D coverageFlags;
+		private bool gpuRendered;
+
 		/* MAP: nearly trivial functions */
 		public void setBody(CelestialBody b)
 		{
@@ -690,7 +717,10 @@ namespace SCANsat.SCAN_Map
 			if (body == null || SCANcontroller.controller == null)
 				return;
 
-			if (mType == mapType.Visual)
+			// The readable copy is only needed by the CPU Visual renderer. Skip it when the GPU
+			// compositor will handle this map (shader present, resource overlay off, source ready);
+			// otherwise load it so the CPU path always has its input.
+			if (mType == mapType.Visual && !willRenderVisualGPU())
 				SCANcontroller.controller.LoadVisualMapTexture_Renamed(body, mSource);
 			else
 				SCANcontroller.controller.UnloadVisualMapTexture(body, mSource);
@@ -708,6 +738,11 @@ namespace SCANsat.SCAN_Map
 
 		internal bool isMapComplete()
 		{
+			if (gpuRendered)
+			{
+				return true;
+			}
+
 			if (map == null)
 			{
 				return false;
@@ -719,6 +754,7 @@ namespace SCANsat.SCAN_Map
 		public void resetMap(bool resourceOn, bool setRes = true)
 		{
 			mapstep = -2;
+			gpuRendered = false;
 			resourceActive = resourceOn;
 			if (SCANconfigLoader.GlobalResource && setRes)
 			{ //Make sure that a resource is initialized if necessary
@@ -847,12 +883,125 @@ namespace SCANsat.SCAN_Map
 
 		#region Big Map Texture Generator
 
+		// True when the GPU compositor is expected to render this map, so the readable CPU copy
+		// can be skipped. Mirrors tryRenderVisualGPU's eligibility: Visual mode, resource overlay
+		// off, composite shader present, and the body's ScaledSpace source textures ready.
+		private bool willRenderVisualGPU()
+		{
+			if (mType != mapType.Visual)
+				return false;
+
+			// Resource-overlay maps still use the CPU path (cache/indexing not ported yet).
+			if (resourceActive && SCANconfigLoader.GlobalResource && resource != null)
+				return false;
+
+			if (SCAN_UI_Loader.VisualCompositeShader == null || body == null || data == null || SCANcontroller.controller == null)
+				return false;
+
+			return SCANcontroller.controller.getScaledSpaceSource(body, out _, out _, out _, out _);
+		}
+
+		// Renders the Visual map on the GPU, sampling the body's ORIGINAL ScaledSpace textures so
+		// no readable CPU copy is needed (that copy is the RSS RAM hog). Returns false (CPU
+		// fallback) when not eligible - see willRenderVisualGPU.
+		private bool tryRenderVisualGPU()
+		{
+			if (!willRenderVisualGPU())
+				return false;
+
+			Shader shader = SCAN_UI_Loader.VisualCompositeShader;
+
+			// (source material / useMaterial flag are for a later gas-giant/Parallax pass)
+			SCANcontroller.controller.getScaledSpaceSource(body, out Texture colorTex, out Texture normalTex, out _, out _);
+
+			if (compositeMaterial == null || compositeMaterial.shader != shader)
+				compositeMaterial = new Material(shader);
+
+			if (visualRenderTex == null || visualRenderTex.width != mapwidth || visualRenderTex.height != mapheight)
+			{
+				if (visualRenderTex != null)
+					visualRenderTex.Release();
+
+				visualRenderTex = new RenderTexture(mapwidth, mapheight, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+				visualRenderTex.wrapMode = TextureWrapMode.Clamp;
+			}
+
+			updateCoverageFlags();
+
+			compositeMaterial.SetTexture("_ScaledColor", colorTex);
+			compositeMaterial.SetTexture("_ScaledNormal", normalTex);
+			compositeMaterial.SetTexture("_CoverageFlags", coverageFlags);
+
+			compositeMaterial.SetFloat("_MapWidth", mapwidth);
+			compositeMaterial.SetFloat("_MapHeight", mapheight);
+			compositeMaterial.SetFloat("_MapScale", (float)mapscale);
+			compositeMaterial.SetFloat("_LonOffset", (float)lon_offset);
+			compositeMaterial.SetFloat("_LatOffset", (float)lat_offset);
+			compositeMaterial.SetFloat("_Projection", (float)(int)projection);
+			compositeMaterial.SetFloat("_CenteredLon", (float)centeredLong);
+			compositeMaterial.SetFloat("_CenteredLat", (float)centeredLat);
+			compositeMaterial.SetFloat("_FlipY", 0f);
+			compositeMaterial.SetFloat("_ColorMode", colorMap ? 1f : 0f);
+			compositeMaterial.SetFloat("_HasNormal", normalTex != null ? 1f : 0f);
+			compositeMaterial.SetFloat("_Terminator", terminator ? 1f : 0f);
+			compositeMaterial.SetFloat("_SunLonCenter", (float)sunLonCenter);
+			compositeMaterial.SetFloat("_SunLatCenter", (float)sunLatCenter);
+			compositeMaterial.SetFloat("_Gamma", (float)gamma);
+
+			Color unscanned = SCAN_Settings_Config.Instance.UnscannedColor;
+			unscanned.a *= SCAN_Settings_Config.Instance.UnscannedTransparency;
+			compositeMaterial.SetColor("_UnscannedColor", unscanned);
+			compositeMaterial.SetColor("_ClearColor", palette.Clear);
+
+			Graphics.Blit(null, visualRenderTex, compositeMaterial);
+
+			gpuRendered = true;
+			mapstep = mapheight;   // mark complete for the legacy mapstep-based checks
+			return true;
+		}
+
+		// Uploads the coverage bitmask as a 360x180 texture the composite shader samples as a
+		// per-pixel stencil: R=VisualHiRes, G=VisualLoRes, B=ResourceHiRes, A=ResourceLoRes.
+		private void updateCoverageFlags()
+		{
+			if (coverageFlags == null)
+			{
+				coverageFlags = new Texture2D(360, 180, TextureFormat.RGBA32, false);
+				coverageFlags.filterMode = FilterMode.Point;
+				coverageFlags.wrapMode = TextureWrapMode.Clamp;
+			}
+
+			Int16[,] cov = data.Coverage;
+			Color32[] flags = new Color32[360 * 180];
+
+			for (int x = 0; x < 360; x++)
+			{
+				for (int y = 0; y < 180; y++)
+				{
+					int c = cov[x, y];
+					byte r = (c & (short)SCANtype.VisualHiRes) != 0 ? (byte)255 : (byte)0;
+					byte g = (c & (short)SCANtype.VisualLoRes) != 0 ? (byte)255 : (byte)0;
+					byte b = (c & (short)SCANtype.ResourceHiRes) != 0 ? (byte)255 : (byte)0;
+					byte a = (c & (short)SCANtype.ResourceLoRes) != 0 ? (byte)255 : (byte)0;
+					flags[y * 360 + x] = new Color32(r, g, b, a);
+				}
+			}
+
+			coverageFlags.SetPixels32(flags);
+			coverageFlags.Apply(false);
+		}
+
 		/* MAP: build: map to Texture2D */
 		internal Texture2D getPartialMap(bool apply = true)
 		{
 			if (data == null)
 			{
 				return new Texture2D(1, 1);
+			}
+
+			if (tryRenderVisualGPU())
+			{
+				return map;
 			}
 
 			System.Random r = new System.Random(ResourceScenario.Instance.gameSettings.Seed);

@@ -100,6 +100,7 @@ namespace SCANsat.SCAN_Unity
 		private static Sprite _mechJebIcon;
 
 		private static Shader _edgeDetectShader;
+		private static Shader _visualCompositeShader;
 
 		private static GameObject[] loadedPrefabs;
 
@@ -320,6 +321,13 @@ namespace SCANsat.SCAN_Unity
 			get { return _edgeDetectShader; }
 		}
 
+		// Null until the scan_shaders bundle is rebuilt to include SCANVisualComposite.shader;
+		// SCANmap falls back to the CPU Visual renderer while it is null.
+		public static Shader VisualCompositeShader
+		{
+			get { return _visualCompositeShader; }
+		}
+
 		public static void ResetUIStyle()
 		{
 			if (loadedPrefabs != null)
@@ -419,6 +427,10 @@ namespace SCANsat.SCAN_Unity
 				if (s.name == "Hidden/EdgeDetectColors")
 				{
 					_edgeDetectShader = s;
+				}
+				else if (s.name == "Hidden/SCANsat/VisualComposite")
+				{
+					_visualCompositeShader = s;
 				}
 			}
 

@@ -238,7 +238,7 @@ namespace SCANsat.SCAN_UI
 
 			start = Planetarium.GetUniversalTime();
 
-			Graphics.Blit(map.Map, screen);
+			Graphics.Blit(map.DisplayTexture, screen);
 			GL.PushMatrix();
 			GL.LoadPixelMatrix(0, screenWidth, screenHeight, 0);
 

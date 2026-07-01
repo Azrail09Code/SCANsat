@@ -259,6 +259,33 @@ namespace SCANsat
 			return null;
 		}
 
+		// Returns the body's ORIGINAL ScaledSpace color/normal textures (already resident on the
+		// GPU) with no readable CPU copy - for the GPU Visual-map compositor (SCANmap). Returns
+		// false if the material/texture isn't ready (e.g. a 1x1 on-demand placeholder), so the
+		// caller retries once loadOnDemandScaledSpace has run.
+		internal bool getScaledSpaceSource(CelestialBody b, out Texture colorTex, out Texture normalTex, out Material material, out bool useMaterialForColor)
+		{
+			colorTex = null;
+			normalTex = null;
+			useMaterialForColor = false;
+
+			GetVisualMapTexturesForBody(b, out material, out useMaterialForColor, out string colorMapTextureName, out string normalMapTextureName);
+
+			if (material == null)
+				return false;
+
+			if (colorMapTextureName != null)
+				colorTex = material.GetTexture(colorMapTextureName);
+
+			if (normalMapTextureName != null)
+				normalTex = material.GetTexture(normalMapTextureName);
+
+			if (colorTex == null || colorTex.width <= 1 || colorTex.height <= 1)
+				return false;
+
+			return true;
+		}
+
 		public static List<SCANterrainConfig> EncodeTerrainConfigs
 		{
 			get
