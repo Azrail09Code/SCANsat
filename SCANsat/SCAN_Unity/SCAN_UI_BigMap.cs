@@ -1333,6 +1333,11 @@ namespace SCANsat.SCAN_Unity
 					SCANcontroller.controller.bigMapType = value;
 					bigmap.MType = t;
 					bigmap.resetMap(SCANcontroller.controller.bigMapResourceOn);
+					// DisplayTexture changes object identity between the CPU Texture2D and the GPU
+					// Visual RenderTexture across modes. The RawImage is only re-pointed when updateMap
+					// is set, so without this a switch out of Visual stays frozen on the stale GPU
+					// texture (the CPU path gets away with it by mutating one Texture2D in place).
+					updateMap = true;
 				}
 				catch (Exception e)
 				{
@@ -1586,6 +1591,9 @@ namespace SCANsat.SCAN_Unity
 				SCANcontroller.controller.bigMapResourceOn = value;
 
 				bigmap.resetMap(SCANcontroller.controller.bigMapResourceOn);
+				// Toggling resources in Visual mode swaps DisplayTexture between the GPU RenderTexture
+				// and the CPU copy; re-push it so the RawImage doesn't stay on the old one.
+				updateMap = true;
 			}
 		}
 

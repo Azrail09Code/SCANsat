@@ -657,6 +657,13 @@ namespace SCANsat.SCAN_Map
 		private Material compositeMaterial;
 		private Texture2D coverageFlags;
 		private bool gpuRendered;
+		// The GPU compositor draws the whole Visual map in one Blit; these drive a purely
+		// cosmetic scanline reveal (in the CPU path's row order) so it matches the CPU modes' look.
+		// sweepStep advances one row per getPartialMap call (the pump calls it MapGenerationSpeed
+		// times per frame, exactly like the CPU one-line-per-call cadence); gpuSweepDone gates
+		// isMapComplete so the pump keeps re-compositing until the reveal finishes.
+		private bool gpuSweepDone;
+		private int sweepStep;
 
 		/* MAP: nearly trivial functions */
 		public void setBody(CelestialBody b)
@@ -740,7 +747,9 @@ namespace SCANsat.SCAN_Map
 		{
 			if (gpuRendered)
 			{
-				return true;
+				// The map is composited, but hold "incomplete" until the cosmetic sweep finishes
+				// so the update pump keeps re-Blitting the advancing scanline (like the CPU path).
+				return gpuSweepDone;
 			}
 
 			if (map == null)
@@ -755,6 +764,8 @@ namespace SCANsat.SCAN_Map
 		{
 			mapstep = -2;
 			gpuRendered = false;
+			gpuSweepDone = false;
+			sweepStep = 0;
 			resourceActive = resourceOn;
 			if (SCANconfigLoader.GlobalResource && setRes)
 			{ //Make sure that a resource is initialized if necessary
@@ -953,10 +964,28 @@ namespace SCANsat.SCAN_Map
 			compositeMaterial.SetColor("_UnscannedColor", unscanned);
 			compositeMaterial.SetColor("_ClearColor", palette.Clear);
 
+			// Advance the cosmetic scanline one row per call, matching the CPU path's one-line-
+			// per-call cadence (mapstep++). We re-composite with the reveal fraction each call so
+			// the RawImage - already pointed at visualRenderTex - animates in place. Same background
+			// colour the CPU path clears to (SCANmap.cs getPartialMap map-init), redline = palette.Red.
+			if (!gpuSweepDone)
+			{
+				sweepStep++;
+				if (sweepStep >= mapheight)
+					gpuSweepDone = true;
+			}
+
+			Color background = SCAN_Settings_Config.Instance.MapBackgroundColor;
+			background.a *= SCAN_Settings_Config.Instance.BackgroundTransparency;
+			compositeMaterial.SetColor("_MapBackgroundColor", background);
+			compositeMaterial.SetColor("_RedlineColor", palette.Red);
+			compositeMaterial.SetFloat("_SweepY", mapheight > 0 ? Mathf.Clamp01((float)sweepStep / mapheight) : 1f);
+
 			Graphics.Blit(null, visualRenderTex, compositeMaterial);
 
-			gpuRendered = true;
-			mapstep = mapheight;   // mark complete for the legacy mapstep-based checks
+			gpuRendered = true;                       // DisplayTexture returns the RT during the sweep
+			if (gpuSweepDone)
+				mapstep = mapheight;                  // mark complete for the legacy mapstep-based checks
 			return true;
 		}
 

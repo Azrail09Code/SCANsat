@@ -19,6 +19,11 @@ Shader "Hidden/SCANsat/VisualComposite"
 		_ScaledColor ("Scaled Color", 2D) = "gray" {}
 		_ScaledNormal ("Scaled Normal", 2D) = "bump" {}
 		_CoverageFlags ("Coverage Flags", 2D) = "black" {}
+		// Cosmetic sweep reveal. Defaults render the whole map (SweepY >= 1) so a fresh
+		// Material is fully revealed even if the C# side never sets these (bundle/DLL skew).
+		_SweepY ("Sweep Reveal", Float) = 1
+		_MapBackgroundColor ("Map Background", Color) = (0,0,0,1)
+		_RedlineColor ("Redline", Color) = (1,0,0,1)
 	}
 	SubShader
 	{
@@ -58,6 +63,13 @@ Shader "Hidden/SCANsat/VisualComposite"
 
 			float4 _UnscannedColor;
 			float4 _ClearColor;
+
+			// Cosmetic sweep reveal (matches the CPU modes' line-by-line render look). The GPU
+			// composites the whole map at once, so the "sweep" is layered on afterwards: rows
+			// ahead of the scanline are drawn as background, the frontier row as a redline.
+			float _SweepY;                 // revealed fraction in texture-row space (uv.y). >=1 = done, no redline.
+			float4 _MapBackgroundColor;    // unrevealed rows (SCAN settings MapBackgroundColor * transparency)
+			float4 _RedlineColor;          // the advancing scanline colour (palette.Red)
 
 			static const float SCAN_PI = 3.14159265358979;
 			static const float DEG2RAD = 0.0174532925199433;
@@ -225,6 +237,10 @@ Shader "Hidden/SCANsat/VisualComposite"
 					{
 						col.rgb = grayscale(col.rgb);
 					}
+					// The raw ScaledSpace colour texture carries alpha ~0 (unlike the CPU path, which
+					// reads a copy produced by an opaque material Blit). Force opaque, else the map is
+					// drawn nearly transparent - a faint ghost of the planet.
+					col.a = 1.0;
 				}
 				else if (visLo)
 				{
@@ -233,6 +249,7 @@ Shader "Hidden/SCANsat/VisualComposite"
 					col = tex2D(_ScaledColor, q);
 					if (_ColorMode <= 0.5)
 						col.rgb = grayscale(col.rgb);
+					col.a = 1.0;
 				}
 				else
 				{
@@ -246,6 +263,21 @@ Shader "Hidden/SCANsat/VisualComposite"
 					bool night = _SunLatCenter >= 0.0 ? (lat < crossingLat) : (lat > crossingLat);
 					if (night)
 						col.rgb = lerp(col.rgb, float3(0.0, 0.0, 0.0), 0.5);
+				}
+
+				// Cosmetic top-of-the-render "sweep": reveal rows in the same order the CPU path
+				// fills them (row 0..mapstep, i.e. increasing uv.y), with a ~2px red scanline at the
+				// frontier. Because the RT and the CPU Texture2D share one RawImage/orientation,
+				// matching the CPU's row order matches its on-screen sweep direction by construction
+				// (invert the uv.y test here if in-game shows it reversed - same class of fix as _FlipY).
+				if (_SweepY < 1.0)
+				{
+					float band = 2.0 / _MapHeight;        // scanline ~2 texture rows thick
+					if (i.uv.y > _SweepY)
+						col = _MapBackgroundColor;        // ahead of the line: not yet revealed
+					else if (i.uv.y > _SweepY - band)
+						col = _RedlineColor;              // the advancing scanline
+					// else: already swept - keep the composited colour
 				}
 
 				return col;
