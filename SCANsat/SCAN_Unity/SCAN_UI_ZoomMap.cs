@@ -204,7 +204,12 @@ namespace SCANsat.SCAN_Unity
 			// Free the readable ScaledSpace copy on window close (only present if this map was
 			// in Visual mode); the shared-body guard keeps it alive if the big map still shows it.
 			if (spotmap != null && SCANcontroller.controller != null)
+			{
 				SCANcontroller.controller.UnloadVisualMapTexture(spotmap.Body, mapSource.ZoomMap);
+				// Also page out the body's OnDemand ScaledSpace (loaded in SCANmap.setBody); guarded
+				// against evicting a body the big map still shows.
+				SCANcontroller.controller.unloadOnDemandScaledSpace(spotmap.Body, mapSource.ZoomMap);
+			}
 
 			if (uiElement == null)
 			{
@@ -669,7 +674,11 @@ namespace SCANsat.SCAN_Unity
 
 		public void OnDestroy()
 		{
-			SCANcontroller.controller.unloadPQS(spotmap.Body, mapSource.BigMap);
+			// 4b: was mapSource.BigMap (wrong source → left zoomMapBodyPQS stale, skipped a PQS unload).
+			SCANcontroller.controller.unloadPQS(spotmap.Body, mapSource.ZoomMap);
+			SCANcontroller.controller.unloadOnDemandScaledSpace(spotmap.Body, mapSource.ZoomMap);
+			spotmap.Destroy();
+			SCANUtil.SCANdebugLog("[SCANmem] ZoomMap OnDestroy texMem={0:F1}MB", UnityEngine.Texture.currentTextureMemory / 1048576f);
 
 			GameEvents.onVesselChange.Remove(vesselChange);
 			GameEvents.onVesselWasModified.Remove(vesselChange);

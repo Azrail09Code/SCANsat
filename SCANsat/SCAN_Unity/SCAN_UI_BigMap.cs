@@ -248,7 +248,12 @@ namespace SCANsat.SCAN_Unity
 			// in Visual mode). Without this it would persist for the whole session. The
 			// controller's shared-body guard keeps it alive if the zoom map still shows it.
 			if (bigmap != null && SCANcontroller.controller != null)
+			{
 				SCANcontroller.controller.UnloadVisualMapTexture(bigmap.Body, mapSource.BigMap);
+				// Also page out the body's OnDemand ScaledSpace (loaded in SCANmap.setBody). Guarded
+				// against evicting a body the zoom map still shows; only unloads when this window closes.
+				SCANcontroller.controller.unloadOnDemandScaledSpace(bigmap.Body, mapSource.BigMap);
+			}
 
 			if (uiElement == null)
 			{
@@ -530,6 +535,11 @@ namespace SCANsat.SCAN_Unity
 			}
 
 			SCANcontroller.controller.unloadPQS(bigmap.Body, mapSource.BigMap);
+			// Scene change doesn't call Close(), so free the OnDemand ScaledSpace + this map's Unity
+			// objects here too (otherwise the SCANmap is orphaned per scene and leaks its textures/RT).
+			SCANcontroller.controller.unloadOnDemandScaledSpace(bigmap.Body, mapSource.BigMap);
+			bigmap.Destroy();
+			SCANUtil.SCANdebugLog("[SCANmem] BigMap OnDestroy texMem={0:F1}MB", UnityEngine.Texture.currentTextureMemory / 1048576f);
 		}
 
 		public void SetScale(float scale)

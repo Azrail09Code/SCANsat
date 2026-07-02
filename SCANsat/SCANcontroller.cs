@@ -1195,7 +1195,7 @@ namespace SCANsat
 			if (_zoomMap != null)
 			{
 				_zoomMap.OnDestroy();
-				_settings = null;
+				_zoomMap = null;
 			}
 
 			if (SCAN_Settings_Config.Instance != null)
@@ -1509,7 +1509,8 @@ namespace SCANsat
 					break;
 			}
 
-			SCANkopernicus.LoadOnDemand(b);
+			SCANUtil.SCANdebugLog("[SCANmem] OnDemand LOAD {0} src={1} texMem={2:F1}MB", b.bodyName, s, UnityEngine.Texture.currentTextureMemory / 1048576f);
+				SCANkopernicus.LoadOnDemand(b);
 		}
 
 		internal void unloadOnDemandScaledSpace(CelestialBody b, mapSource s)
@@ -1576,7 +1577,8 @@ namespace SCANsat
 				return;
 			}
 
-			SCANkopernicus.UnloadOnDemand(b);
+			SCANUtil.SCANdebugLog("[SCANmem] OnDemand UNLOAD {0} src={1} texMem={2:F1}MB", b.bodyName, s, UnityEngine.Texture.currentTextureMemory / 1048576f);
+				SCANkopernicus.UnloadOnDemand(b);
 		}
 
 		private bool InCurrentBodyFamily(CelestialBody b)

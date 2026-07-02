@@ -538,6 +538,19 @@ namespace SCANsat.SCAN_Map
 			resetMap(resourceActive);
 		}
 
+		// Free the Unity objects this map owns. Texture2D/RenderTexture/Material are NOT GC-managed
+		// and are NOT auto-destroyed on scene load, so an orphaned SCANmap (the bigmap/spotmap
+		// wrappers are re-created per scene) leaks them - SCANmap is a plain class with no finalizer.
+		// The owning window's OnDestroy calls this. Safe to call more than once.
+		internal void Destroy()
+		{
+			if (map != null) { UnityEngine.Object.Destroy(map); map = null; }
+			if (coverageFlags != null) { UnityEngine.Object.Destroy(coverageFlags); coverageFlags = null; }
+			if (compositeMaterial != null) { UnityEngine.Object.Destroy(compositeMaterial); compositeMaterial = null; }
+			if (visualRenderTex != null) { visualRenderTex.Release(); UnityEngine.Object.Destroy(visualRenderTex); visualRenderTex = null; }
+			if (exporter != null) { UnityEngine.Object.Destroy(exporter.gameObject); exporter = null; }
+		}
+
 		internal void centerAround(double lon, double lat)
 		{
 			centeredLong = lon;

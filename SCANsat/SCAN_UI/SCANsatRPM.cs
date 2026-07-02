@@ -150,6 +150,16 @@ namespace SCANsat.SCAN_UI
 		private bool satFound;
 		private bool satModuleFound = true;
 
+		// InternalModule has no teardown, so its per-instance Material + SCANmap (map texture/RT/material)
+		// leak on every IVA load / vessel switch. Free them here (Unity calls OnDestroy on component destroy).
+		private void OnDestroy()
+		{
+			if (iconMaterial != null) { UnityEngine.Object.Destroy(iconMaterial); iconMaterial = null; }
+			if (scaleBarTexture != null) { UnityEngine.Object.Destroy(scaleBarTexture); scaleBarTexture = null; }
+			if (scaleLabelTexture != null) { UnityEngine.Object.Destroy(scaleLabelTexture); scaleLabelTexture = null; }
+			if (map != null) { map.Destroy(); map = null; }
+		}
+
 		private bool TestForActiveSCANsat()
 		{
 			if (satFound)

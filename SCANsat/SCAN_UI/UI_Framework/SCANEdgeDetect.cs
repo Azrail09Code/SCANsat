@@ -27,6 +27,12 @@ namespace SCANsat.SCAN_UI.UI_Framework
 				Destroy(_rampTexture);
 				_rampTexture = null;
 			}
+
+			if (_edgeDetectMaterial != null)
+			{
+				Destroy(_edgeDetectMaterial);
+				_edgeDetectMaterial = null;
+			}
 		}
 
 		private void SetMaterial()

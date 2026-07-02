@@ -784,6 +784,7 @@ namespace SCANsat.SCAN_UI.UI_Framework
 
 			if (map == null || pix == null || values == null || map.height != height)
 			{
+				if (map != null) UnityEngine.Object.Destroy(map);
 				map = new Texture2D(width, height, TextureFormat.ARGB32, true);
 				pix = new Color32[width * height];
 				values = new float[width, height];
@@ -839,6 +840,7 @@ namespace SCANsat.SCAN_UI.UI_Framework
 
 			if (map == null || pix == null || map.height != height)
 			{
+				if (map != null) UnityEngine.Object.Destroy(map);
 				map = new Texture2D(width, height, TextureFormat.ARGB32, true);
 				pix = new Color32[width * height];
 			}
@@ -888,6 +890,7 @@ namespace SCANsat.SCAN_UI.UI_Framework
 
 			if (m == null || m.height != h)
 			{
+				if (m != null) UnityEngine.Object.Destroy(m);
 				m = new Texture2D(h * 2, h, TextureFormat.RGBA32, true);
 			}
 
@@ -999,6 +1002,7 @@ namespace SCANsat.SCAN_UI.UI_Framework
 
 			if (map == null || pix == null || map.height != height)
 			{
+				if (map != null) UnityEngine.Object.Destroy(map);
 				map = new Texture2D(width, height, TextureFormat.ARGB32, true);
 				pix = new Color32[width * height];
 			}
@@ -1157,6 +1161,7 @@ namespace SCANsat.SCAN_UI.UI_Framework
 		{
 			if (map.Map == null || pix == null || map.Map.height != height)
 			{
+				if (map.Map != null) UnityEngine.Object.Destroy(map.Map);
 				map.Map = new Texture2D(width, height, TextureFormat.ARGB32, false);
 				pix = new Color32[width * height];
 				values = new float[width, height];

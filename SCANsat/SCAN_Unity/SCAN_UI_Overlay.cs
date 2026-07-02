@@ -881,6 +881,7 @@ namespace SCANsat.SCAN_Unity
 
 			if (mapOverlay == null || mapOverlay.height != SCAN_Settings_Config.Instance.ResourceMapHeight)
 			{
+				if (mapOverlay != null) UnityEngine.Object.Destroy(mapOverlay);
 				mapOverlay = new Texture2D(SCAN_Settings_Config.Instance.ResourceMapHeight * 2, SCAN_Settings_Config.Instance.ResourceMapHeight, TextureFormat.ARGB32, true);
 			}
 

@@ -44,6 +44,7 @@ namespace SCANsat.SCAN_Map
 
 			body = null;
 
+			if (legend != null) UnityEngine.Object.Destroy(legend);
 			legend = new Texture2D(256, 1, TextureFormat.RGB24, false);
 			legendMin = terrain.MinTerrain;
 			legendMax = terrain.MaxTerrain;
@@ -67,6 +68,7 @@ namespace SCANsat.SCAN_Map
 				return legend;
 			}
 
+			if (legend != null) UnityEngine.Object.Destroy(legend);
 			legend = new Texture2D(256, 1, TextureFormat.RGB24, false);
 			legendMin = min;
 			legendMin = max;
@@ -92,6 +94,7 @@ namespace SCANsat.SCAN_Map
 
 			dataPalette = new SCANPalette();
 
+			if (legend != null) UnityEngine.Object.Destroy(legend);
 			legend = new Texture2D(256, 1, TextureFormat.RGB24, false);
 			body = data.Body;
 			legendScheme = color;
