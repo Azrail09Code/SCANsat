@@ -12,7 +12,9 @@
   <ItemGroup>
     <KSPVersionFile Include="$(RepoRootPath)\GameData\SCANsat\SCANsat.version">
       <Destination>$(RepoRootPath)\GameData\SCANsat\SCANsat.version</Destination>
+      <KSP_Version>1.12.5</KSP_Version>
       <KSP_Version_Min>1.12.3</KSP_Version_Min>
+      <KSP_Version_Max>1.12.5</KSP_Version_Max>
     </KSPVersionFile>
   </ItemGroup>
   <ItemGroup>

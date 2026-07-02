@@ -19,8 +19,8 @@ file (`SCANsat-GPU.netkan`) to the NetKAN repo; a bot follows it to your release
    ```powershell
    .\build-release.ps1            # or -KspRoot <path to a KSP 1.12.5 install with the Managed DLLs>
    ```
-   Produces `dist\SCANsat-GPU-21.1.1.zip` (GameData/SCANsat/... with the built DLLs + rebuilt
-   `scan_shaders.scan` bundle) and `dist\SCANsat.version`.
+   Produces `Releases\SCANsat-GPU-21.1.1.0.zip` (GameData/SCANsat/... with the built DLLs + rebuilt
+   `scan_shaders.scan` bundle) and `Releases\SCANsat.version`.
    - Reminder: if you changed the shader, **rebuild the Unity asset bundle first**
      (Unity 2019.4.18f1 -> `SCANsat -> Build All Bundles`) and commit `scan_shaders.scan`, else the
      zip ships the old bundle.
