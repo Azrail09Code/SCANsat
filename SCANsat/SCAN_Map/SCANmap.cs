@@ -1020,12 +1020,12 @@ namespace SCANsat.SCAN_Map
 			{
 				for (int y = 0; y < 180; y++)
 				{
+					// Pack the raw 16-bit coverage: R = low byte, G = high byte. The shader decodes
+					// cov = round(R*255) + 256*round(G*255) and tests any SCANtype bit (covHas). This
+					// exposes every bit (Altimetry 0/1, VisualLoRes 2, Biome 3, VisualHiRes 6,
+					// Resource 7/8) with one texture, vs the old 4-bit RGBA pack.
 					int c = cov[x, y];
-					byte r = (c & (short)SCANtype.VisualHiRes) != 0 ? (byte)255 : (byte)0;
-					byte g = (c & (short)SCANtype.VisualLoRes) != 0 ? (byte)255 : (byte)0;
-					byte b = (c & (short)SCANtype.ResourceHiRes) != 0 ? (byte)255 : (byte)0;
-					byte a = (c & (short)SCANtype.ResourceLoRes) != 0 ? (byte)255 : (byte)0;
-					flags[y * 360 + x] = new Color32(r, g, b, a);
+					flags[y * 360 + x] = new Color32((byte)(c & 0xFF), (byte)((c >> 8) & 0xFF), 0, 255);
 				}
 			}
 

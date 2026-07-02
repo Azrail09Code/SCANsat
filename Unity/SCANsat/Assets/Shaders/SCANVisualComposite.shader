@@ -1,17 +1,22 @@
-// SCANsat "Visual" map mode, composited on the GPU.
+// SCANsat map compositing on the GPU (all modes).
 //
-// This is a full-screen Blit shader that reproduces the per-pixel Visual branch of
-// SCANmap.getPartialMap (SCANmap.cs ~1011-1360). Rendering the Visual map here lets us
-// sample the body's ORIGINAL ScaledSpace textures directly on the GPU, so SCANsat no
-// longer needs a CPU-readable copy of them - the copy is what blows up RAM under RSS
-// (4K-8K bodies -> hundreds of MB each). See SCANmap.tryRenderVisualGPU / SCANcontroller.
+// A full-screen Blit shader that reproduces SCANmap.getPartialMap on the GPU. Originally the
+// Visual mode only (so SCANsat no longer needs a CPU-readable copy of each body's ScaledSpace
+// textures - the RSS RAM hog); now branches on _MapMode to also draw Altimetry / Slope / Biome,
+// plus the resource overlay. The point for the non-Visual modes is latency/UX (instant recolour
+// on palette / clamp / setting changes, no per-frame CPU scanline loop), NOT RAM.
 //
-// Scope of this pass: the 4 inverse projections, the VisualHiRes/VisualLoRes coverage
-// stencil, the base ScaledSpace colour, the normal-map soft-light shading, grayscale mode,
-// and the day/night terminator. Resource-overlay maps still fall back to the CPU path.
+// Data flow: the C# side (SCANmap.tryRenderGPU) uploads the mode's already-computed CPU data as a
+// texture - elevation (big_heightmap), biome index (biome_indexmap), resource abundance
+// (resourceCache) - plus 1-D palette LUTs baked by SCANcolorUtil.heightToColor (so map + legend
+// stay pixel-consistent). The shader does the coverage mask + LUT/colorize + overlay + terminator.
 //
-// NOTE: rebuild the scan_shaders asset bundle (SCANsat -> Build All Bundles, Unity
-// 2019.4.18f1) for this to be picked up at runtime; until then SCANsat uses the CPU path.
+// Coverage stencil is now the raw 16-bit SCANdata.coverage, packed R=low byte / G=high byte.
+//
+// NOTE: rebuild the scan_shaders asset bundle (SCANsat -> Build All Bundles, Unity 2019.4.18f1)
+// after any change here; until then SCANsat uses the CPU path. Data-texture ORIENTATION (the geo
+// UV mappings below) is the main thing to verify in-game - if a mode is mirrored/flipped, adjust
+// the geoUV / elevUV / resUV construction (same class of fix as Visual's `fLon = 1 - fLon`).
 Shader "Hidden/SCANsat/VisualComposite"
 {
 	Properties
@@ -19,9 +24,14 @@ Shader "Hidden/SCANsat/VisualComposite"
 		_ScaledColor ("Scaled Color", 2D) = "gray" {}
 		_ScaledNormal ("Scaled Normal", 2D) = "bump" {}
 		_CoverageFlags ("Coverage Flags", 2D) = "black" {}
+		_ElevationTex ("Elevation", 2D) = "black" {}
+		_BiomeIndexTex ("Biome Index", 2D) = "black" {}
+		_ResourceTex ("Resource Abundance", 2D) = "black" {}
+		_PaletteLUT ("Palette LUT", 2D) = "white" {}
 		// Cosmetic sweep reveal. Defaults render the whole map (SweepY >= 1) so a fresh
 		// Material is fully revealed even if the C# side never sets these (bundle/DLL skew).
 		_SweepY ("Sweep Reveal", Float) = 1
+		_MapMode ("Map Mode", Float) = 3
 		_MapBackgroundColor ("Map Background", Color) = (0,0,0,1)
 		_RedlineColor ("Redline", Color) = (1,0,0,1)
 	}
@@ -38,7 +48,11 @@ Shader "Hidden/SCANsat/VisualComposite"
 
 			sampler2D _ScaledColor;
 			sampler2D _ScaledNormal;
-			sampler2D _CoverageFlags;   // 360x180, point-sampled. R=VisualHiRes G=VisualLoRes (B/A reserved)
+			sampler2D _CoverageFlags;   // 360x180, point-sampled. R=low byte, G=high byte of SCANdata.coverage Int16
+			sampler2D _ElevationTex;    // geographic mapW x mapH, R = raw elevation (metres); from big_heightmap
+			sampler2D _BiomeIndexTex;   // geographic mapW x mapH, R = biome index fraction [0,1]
+			sampler2D _ResourceTex;     // geographic resW x resH, R = abundance fraction [0,1]; from resourceCache
+			sampler2D _PaletteLUT;      // 1-D (Nx1) elevation colour ramp baked from heightToColor
 
 			// Projection / map framing (mirror SCANmap fields)
 			float _MapWidth;
@@ -51,9 +65,34 @@ Shader "Hidden/SCANsat/VisualComposite"
 			float _CenteredLat;
 			float _FlipY;           // 1 to flip the vertical axis (Blit Y-orientation safety toggle)
 
+			float _MapMode;         // 0 Altimetry, 1 Slope, 2 Biome, 3 Visual (mapType enum)
+
 			// Visual layer
 			float _ColorMode;       // 1 colour, 0 grayscale
 			float _HasNormal;       // 1 if a normal map is bound
+
+			// Altimetry / Slope
+			float _TerrainMin;      // LUT domain min (metres)
+			float _TerrainRange;    // LUT domain range (metres)
+			float _SlopeCutoff;
+			float4 _SlopeLoColorOne;
+			float4 _SlopeHiColorOne;
+			float4 _SlopeLoColorTwo;
+			float4 _SlopeHiColorTwo;
+
+			// Biome
+			float4 _LowBiomeColor;
+			float4 _HighBiomeColor;
+			float _BiomeTransparency;
+			float _BiomeBorder;     // 1 draw white biome borders
+
+			// Resource overlay
+			float _ResourceActive;  // 1 apply resource overlay on top of the base colour
+			float4 _ResMinColor;
+			float4 _ResMaxColor;
+			float _ResMinRange;     // 0..100
+			float _ResMaxRange;     // 0..100
+			float _ResTransparency; // 0..1 (config /100)
 
 			// Terminator
 			float _Terminator;      // 1 on
@@ -63,13 +102,12 @@ Shader "Hidden/SCANsat/VisualComposite"
 
 			float4 _UnscannedColor;
 			float4 _ClearColor;
+			float4 _GreyColor;      // palette.Grey (for below-min-range resource)
 
-			// Cosmetic sweep reveal (matches the CPU modes' line-by-line render look). The GPU
-			// composites the whole map at once, so the "sweep" is layered on afterwards: rows
-			// ahead of the scanline are drawn as background, the frontier row as a redline.
+			// Cosmetic sweep reveal (matches the CPU modes' line-by-line render look).
 			float _SweepY;                 // revealed fraction in texture-row space (uv.y). >=1 = done, no redline.
-			float4 _MapBackgroundColor;    // unrevealed rows (SCAN settings MapBackgroundColor * transparency)
-			float4 _RedlineColor;          // the advancing scanline colour (palette.Red)
+			float4 _MapBackgroundColor;    // unrevealed rows
+			float4 _RedlineColor;          // the advancing scanline colour
 
 			static const float SCAN_PI = 3.14159265358979;
 			static const float DEG2RAD = 0.0174532925199433;
@@ -84,9 +122,7 @@ Shader "Hidden/SCANsat/VisualComposite"
 				lat = fmod(lat + 1800.0 + 90.0, 180.0) - 90.0;
 			}
 
-			// Pixel raw coords -> geographic lon/lat (degrees). Returns false for pixels that
-			// fall outside the projected disc (drawn as _ClearColor), matching the CPU guard
-			// `IsNaN || lat<-90 || lat>90 || lon<-180 || lon>180`.
+			// Pixel raw coords -> geographic lon/lat (degrees). Returns false for out-of-disc pixels.
 			bool unproject(float lonRaw, float latRaw, out float lon, out float lat)
 			{
 				normalizeRaw(lonRaw, latRaw);
@@ -198,6 +234,17 @@ Shader "Hidden/SCANsat/VisualComposite"
 				return hsl2rgb(float3(hsl.x, hsl.y, lum));
 			}
 
+			// Decode the packed 16-bit coverage cell (R=low byte, G=high byte) and test a bit.
+			float decodeCoverage(float2 geoStencilUV)
+			{
+				float2 f = tex2D(_CoverageFlags, geoStencilUV).rg;
+				return floor(f.r * 255.0 + 0.5) + 256.0 * floor(f.g * 255.0 + 0.5);
+			}
+			bool covHas(float cov, float bit)  // bit = SCANtype exponent (AltLo=0,AltHi=1,VisLo=2,Biome=3,VisHi=6,ResLo=7,ResHi=8)
+			{
+				return fmod(floor(cov / exp2(bit)), 2.0) >= 0.5;
+			}
+
 			fixed4 frag(v2f_img i) : SV_Target
 			{
 				float vy = _FlipY > 0.5 ? 1.0 - i.uv.y : i.uv.y;
@@ -213,47 +260,117 @@ Shader "Hidden/SCANsat/VisualComposite"
 				// Coverage stencil lookup (SCANUtil.icLON/icLAT -> Coverage[ilon,ilat]).
 				float ilon = fmod(floor(lon + 540.0), 360.0);
 				float ilat = fmod(floor(lat + 270.0), 180.0);
-				float4 flags = tex2D(_CoverageFlags, float2((ilon + 0.5) / 360.0, (ilat + 0.5) / 180.0));
-				bool visHi = flags.r > 0.5;
-				bool visLo = flags.g > 0.5;
+				float cov = decodeCoverage(float2((ilon + 0.5) / 360.0, (ilat + 0.5) / 180.0));
 
-				// Base ScaledSpace UV (SCANmap.cs:1183-1199).
+				// Geographic UVs for the map-resolution data textures (equirectangular).
+				// NOTE verify orientation in-game; mirror like Visual's fLon if a mode comes out flipped.
+				float2 geoUV = float2(saturate((lon + 180.0) / 360.0), saturate((lat + 90.0) / 180.0));
+
+				// Base ScaledSpace UV for Visual (SCANmap.cs:1183-1199).
 				float fLat = saturate((lat + 90.0) / 180.0);
 				float fLon = (lon + 270.0) / 360.0;
 				if (fLon < 0.0) fLon += 1.0;
 				if (fLon > 1.0) fLon -= 1.0;
 				fLon = saturate(1.0 - fLon);
 
-				float4 col;
-				if (visHi)
+				float4 col = _UnscannedColor;
+
+				if (_MapMode < 0.5)             // ---- Altimetry ----
 				{
-					col = tex2D(_ScaledColor, float2(fLon, fLat));
-					if (_ColorMode > 0.5)
+					if (covHas(cov, 0.0) || covHas(cov, 1.0))
 					{
-						if (_HasNormal > 0.5)
-							col.rgb = normalSoftLight(col.rgb, tex2D(_ScaledNormal, float2(fLon, fLat)).b);
+						float elev = tex2D(_ElevationTex, geoUV).r;
+						float t = _TerrainRange > 0.0 ? saturate((elev - _TerrainMin) / _TerrainRange) : 0.5;
+						col = tex2D(_PaletteLUT, float2(t, 0.5));
+						col.a = 1.0;
 					}
-					else
+				}
+				else if (_MapMode < 1.5)        // ---- Slope ----
+				{
+					if (covHas(cov, 0.0) || covHas(cov, 1.0))
 					{
-						col.rgb = grayscale(col.rgb);
+						// True gradient from neighbour elevation texels (cleaner than the CPU
+						// cross-scanline max-diff; won't match it pixel-for-pixel by design).
+						float2 tx = float2(1.0 / _MapWidth, 1.0 / _MapHeight);
+						float e  = tex2D(_ElevationTex, geoUV).r;
+						float eR = tex2D(_ElevationTex, geoUV + float2(tx.x, 0)).r;
+						float eU = tex2D(_ElevationTex, geoUV + float2(0, tx.y)).r;
+						float v = saturate(max(abs(e - eR), abs(e - eU)) / (1000.0 / _MapScale) * 0.5);
+						v = min(v, 2.0);
+						if (v < _SlopeCutoff)
+							col = lerp(_SlopeLoColorOne, _SlopeHiColorOne, v / _SlopeCutoff);
+						else
+							col = lerp(_SlopeLoColorTwo, _SlopeHiColorTwo, (v - _SlopeCutoff) / (2.0 - _SlopeCutoff));
+						col.a = 1.0;
 					}
-					// The raw ScaledSpace colour texture carries alpha ~0 (unlike the CPU path, which
-					// reads a copy produced by an opaque material Blit). Force opaque, else the map is
-					// drawn nearly transparent - a faint ghost of the planet.
-					col.a = 1.0;
 				}
-				else if (visLo)
+				else if (_MapMode < 2.5)        // ---- Biome ----
 				{
-					// Coarse 512x256 nearest sample (SCANmap.cs:1260-1302).
-					float2 q = float2(floor(fLon * 512.0) / 512.0, floor(fLat * 256.0) / 256.0);
-					col = tex2D(_ScaledColor, q);
-					if (_ColorMode <= 0.5)
-						col.rgb = grayscale(col.rgb);
-					col.a = 1.0;
+					if (covHas(cov, 3.0))
+					{
+						float bIdx = tex2D(_BiomeIndexTex, geoUV).r;
+						float2 tx = float2(1.0 / _MapWidth, 1.0 / _MapHeight);
+						float bL = tex2D(_BiomeIndexTex, geoUV - float2(tx.x, 0)).r;
+						float bD = tex2D(_BiomeIndexTex, geoUV - float2(0, tx.y)).r;
+						if (_BiomeBorder > 0.5 && (abs(bIdx - bL) > 0.0001 || abs(bIdx - bD) > 0.0001))
+						{
+							col = float4(1.0, 1.0, 1.0, 1.0);   // palette.White border
+						}
+						else
+						{
+							// SCANsat low/high gradient (stock-biome LUT path handled CPU-side for now).
+							float4 g = lerp(_LowBiomeColor, _HighBiomeColor, bIdx);
+							col = lerp(g, _ClearColor, _BiomeTransparency);
+							col.a = 1.0;
+						}
+					}
 				}
-				else
+				else                            // ---- Visual (3) ----
 				{
-					col = _UnscannedColor;
+					bool visHi = covHas(cov, 6.0);
+					bool visLo = covHas(cov, 2.0);
+					if (visHi)
+					{
+						col = tex2D(_ScaledColor, float2(fLon, fLat));
+						if (_ColorMode > 0.5)
+						{
+							if (_HasNormal > 0.5)
+								col.rgb = normalSoftLight(col.rgb, tex2D(_ScaledNormal, float2(fLon, fLat)).b);
+						}
+						else
+						{
+							col.rgb = grayscale(col.rgb);
+						}
+						col.a = 1.0;
+					}
+					else if (visLo)
+					{
+						float2 q = float2(floor(fLon * 512.0) / 512.0, floor(fLat * 256.0) / 256.0);
+						col = tex2D(_ScaledColor, q);
+						if (_ColorMode <= 0.5)
+							col.rgb = grayscale(col.rgb);
+						col.a = 1.0;
+					}
+				}
+
+				// Resource overlay on top of the base colour (SCANmap.cs:1496-1518, resourceToColor32).
+				if (_ResourceActive > 0.5)
+				{
+					bool resHi = covHas(cov, 8.0);
+					bool resLo = covHas(cov, 7.0);
+					if (resHi || resLo)
+					{
+						float ab = tex2D(_ResourceTex, geoUV).r * 100.0;   // stored as fraction, *100 -> percent
+						if (resLo && !resHi)
+							ab = floor(ab / 5.0) * 5.0 + 2.5;              // LoRes 5% buckets
+						if (ab < _ResMinRange)
+							col = lerp(col, _GreyColor, _ResTransparency);
+						else
+						{
+							float rt = _ResMaxRange > _ResMinRange ? (ab - _ResMinRange) / (_ResMaxRange - _ResMinRange) : 0.0;
+							col = lerp(lerp(_ResMinColor, _ResMaxColor, saturate(rt)), col, _ResTransparency);
+						}
+					}
 				}
 
 				// Terminator day/night darkening (SCANmap.cs:1342-1360).
@@ -265,19 +382,15 @@ Shader "Hidden/SCANsat/VisualComposite"
 						col.rgb = lerp(col.rgb, float3(0.0, 0.0, 0.0), 0.5);
 				}
 
-				// Cosmetic top-of-the-render "sweep": reveal rows in the same order the CPU path
-				// fills them (row 0..mapstep, i.e. increasing uv.y), with a ~2px red scanline at the
-				// frontier. Because the RT and the CPU Texture2D share one RawImage/orientation,
-				// matching the CPU's row order matches its on-screen sweep direction by construction
-				// (invert the uv.y test here if in-game shows it reversed - same class of fix as _FlipY).
+				// Cosmetic sweep reveal (unchanged): rows ahead of the scanline drawn as background,
+				// the frontier as a redline. Matches the CPU modes' row order.
 				if (_SweepY < 1.0)
 				{
-					float band = 2.0 / _MapHeight;        // scanline ~2 texture rows thick
+					float band = 2.0 / _MapHeight;
 					if (i.uv.y > _SweepY)
-						col = _MapBackgroundColor;        // ahead of the line: not yet revealed
+						col = _MapBackgroundColor;
 					else if (i.uv.y > _SweepY - band)
-						col = _RedlineColor;              // the advancing scanline
-					// else: already swept - keep the composited colour
+						col = _RedlineColor;
 				}
 
 				return col;
