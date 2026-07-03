@@ -1046,6 +1046,29 @@ namespace SCANsat.SCAN_Map
 		// per-pixel stencil: R=VisualHiRes, G=VisualLoRes, B=ResourceHiRes, A=ResourceLoRes.
 		// GPU mode data helpers:
 
+		// Create the GPU RenderTexture (cleared to background) + set gpuRendered so DisplayTexture
+		// returns it immediately - before tryRenderGPU has real data. Fixes the updateMap timing for
+		// non-Visual modes: their tryRenderGPU runs in the getPartialMap branch (after the prep loop),
+		// which is AFTER the BigMap pump consumes updateMap on the mode-switch frame, so without this
+		// the RawImage stays pointed at the never-painted CPU map texture and shows blank. (Visual
+		// primes via its own tryRenderGPU at the top of getPartialMap.)
+		private void primeGpuRenderTex()
+		{
+			if (visualRenderTex == null || visualRenderTex.width != mapwidth || visualRenderTex.height != mapheight)
+			{
+				if (visualRenderTex != null) visualRenderTex.Release();
+				visualRenderTex = new RenderTexture(mapwidth, mapheight, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+				visualRenderTex.wrapMode = TextureWrapMode.Clamp;
+				RenderTexture prev = RenderTexture.active;
+				RenderTexture.active = visualRenderTex;
+				Color bg = SCAN_Settings_Config.Instance.MapBackgroundColor;
+				bg.a *= SCAN_Settings_Config.Instance.BackgroundTransparency;
+				GL.Clear(false, true, bg);
+				RenderTexture.active = prev;
+			}
+			gpuRendered = true;
+		}
+
 		// Per-mode data textures + uniforms for tryRenderGPU. Visual's ScaledSpace textures are set by
 		// the caller; here we upload the CPU-cache data for Altimetry/Slope/Biome + the resource overlay.
 		private void setModeUniforms()
@@ -1206,6 +1229,12 @@ namespace SCANsat.SCAN_Map
 			{
 				return map;
 			}
+
+			// Non-Visual GPU modes: point DisplayTexture at the RenderTexture up-front so the RawImage
+			// tracks the GPU output on the same frame the UI consumes updateMap (the real data render
+			// happens in the non-Visual branch below, after the prep loop fills the caches).
+			if (mType != mapType.Visual && !gpuRendered && willRenderGPU(mType))
+				primeGpuRenderTex();
 
 			System.Random r = new System.Random(ResourceScenario.Instance.gameSettings.Seed);
 

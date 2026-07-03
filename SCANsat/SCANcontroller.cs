@@ -1586,6 +1586,8 @@ namespace SCANsat
 			switch (HighLogic.LoadedScene)
 			{
 				case GameScenes.TRACKSTATION:
+					if (PlanetariumCamera.fetch == null || PlanetariumCamera.fetch.target == null)
+						break;
 					MapObject mo = PlanetariumCamera.fetch.target;
 
 					CelestialBody tgt = null;
@@ -1621,6 +1623,8 @@ namespace SCANsat
 
 					break;
 				case GameScenes.FLIGHT:
+					if (FlightGlobals.currentMainBody == null)   // null mid scene-teardown (called via OnDestroy)
+						break;
 					if (b == FlightGlobals.currentMainBody)
 					{
 						return true;
