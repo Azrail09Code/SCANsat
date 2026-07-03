@@ -696,6 +696,7 @@ namespace SCANsat.SCAN_Map
 			private int paletteLUTHash;
 			private bool gpuDataComplete;   // the non-Visual data cache is fully sampled for gpuDataHash's config
 			private int gpuDataHash;        // config (body/mode/projection/size/offsets) the cached data is valid for
+			private bool gpuRecolorSweep;   // cosmetic re-sweep in progress: re-Blit cached data with a new LUT (no re-sample)
 		// The GPU compositor draws the whole Visual map in one Blit; these drive a purely
 		// cosmetic scanline reveal (in the CPU path's row order) so it matches the CPU modes' look.
 		// sweepStep advances one row per getPartialMap call (the pump calls it MapGenerationSpeed
@@ -882,9 +883,10 @@ namespace SCANsat.SCAN_Map
 			if (gpuDataComplete && gpuDataHash == gpuConfigHash() && willRenderGPU(mType)
 				&& (mType == mapType.Altimetry || mType == mapType.Slope || mType == mapType.Biome))
 			{
-				mapstep = mapheight - 1;
+				mapstep = 0;               // replay the sweep from the top...
 				gpuRendered = true;
-				gpuSweepDone = false;      // one more getPartialMap call does the re-Blit
+				gpuSweepDone = false;
+				gpuRecolorSweep = true;    // ...re-Blitting the cached data with the rebuilt LUT (charm, no re-sample)
 				resourceTexReady = false;  // resource colours may have changed too
 			}
 		}
@@ -1341,6 +1343,23 @@ namespace SCANsat.SCAN_Map
 			// happens in the non-Visual branch below, after the prep loop fills the caches).
 			if (mType != mapType.Visual && !gpuRendered && willRenderGPU(mType))
 				primeGpuRenderTex();
+
+			// Cosmetic re-sweep after a colour-only change: the data textures are already uploaded, so
+			// skip the whole prep/CPU loop and just re-Blit each frame with the rebuilt LUT while the
+			// sweep reveal advances - keeps the sweep charm with no PQS re-sample and no re-processing.
+			if (gpuRecolorSweep)
+			{
+				tryRenderGPU();
+				mapstep++;
+				if (mapstep >= mapheight)
+				{
+					gpuSweepDone = true;
+					gpuRecolorSweep = false;
+					gpuDataComplete = true;
+					gpuDataHash = gpuConfigHash();
+				}
+				return map;
+			}
 
 			System.Random r = new System.Random(ResourceScenario.Instance.gameSettings.Seed);
 
