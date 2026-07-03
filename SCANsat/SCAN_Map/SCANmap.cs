@@ -693,6 +693,7 @@ namespace SCANsat.SCAN_Map
 			private Color[] gpuDataBuf;
 			private Color[] gpuRowBuf;
 			private bool resourceTexReady;
+			private bool resourceCacheReady;   // resourceCache is built this reset (by the prep loop or the lazy GPU build)
 			private int paletteLUTHash;
 			private bool gpuDataComplete;   // the non-Visual data cache is fully sampled for gpuDataHash's config
 			private int gpuDataHash;        // config (body/mode/projection/size/offsets) the cached data is valid for
@@ -807,6 +808,7 @@ namespace SCANsat.SCAN_Map
 			gpuSweepDone = false;
 			sweepStep = 0;
 			resourceTexReady = false;
+			resourceCacheReady = false;
 			resourceActive = resourceOn;
 			if (SCANconfigLoader.GlobalResource && setRes)
 			{ //Make sure that a resource is initialized if necessary
@@ -1149,7 +1151,8 @@ namespace SCANsat.SCAN_Map
 			compositeMaterial.SetFloat("_ResourceActive", resOn ? 1f : 0f);
 			if (resOn)
 			{
-				if (!resourceTexReady) { uploadResourceTexture(); resourceTexReady = true; }   // resourceCache is built once in the prep pass
+				if (!resourceCacheReady) { buildResourceCache(); resourceCacheReady = true; }   // GPU paths skip the prep that builds it
+				if (!resourceTexReady) { uploadResourceTexture(); resourceTexReady = true; }
 				compositeMaterial.SetTexture("_ResourceTex", resourceTex);
 				float minR = useCustomRange ? customResourceMin : resource.CurrentBody.MinValue;
 				float maxR = useCustomRange ? customResourceMax : resource.CurrentBody.MaxValue;
@@ -1225,6 +1228,20 @@ namespace SCANsat.SCAN_Map
 		}
 
 		// Upload resourceCache (geographic resW x resH) as an R-float abundance texture (fraction 0..1).
+		// Build resourceCache (stock abundance) - the GPU paths (Visual short-circuit, fake-sweep fast
+		// path) skip the prep loop that normally builds it, and resetResourceMap clears it every reset.
+		private void buildResourceCache()
+		{
+			SCANuiUtil.generateResourceCache(ref resourceCache, resourceMapHeight, resourceMapWidth, resourceInterpolation, resourceMapScale, this);
+			System.Random rr = new System.Random(ResourceScenario.Instance.gameSettings.Seed);
+			for (int i = resourceInterpolation / 2; i >= 1; i /= 2)
+			{
+				SCANuiUtil.interpolate(resourceCache, resourceMapHeight, resourceMapWidth, i, i, i, rr, randomEdges, mSource == mapSource.ZoomMap);
+				SCANuiUtil.interpolate(resourceCache, resourceMapHeight, resourceMapWidth, 0, i, i, rr, randomEdges, mSource == mapSource.ZoomMap);
+				SCANuiUtil.interpolate(resourceCache, resourceMapHeight, resourceMapWidth, i, 0, i, rr, randomEdges, mSource == mapSource.ZoomMap);
+			}
+		}
+
 		private void uploadResourceTexture()
 		{
 			if (resourceCache == null) return;
