@@ -975,24 +975,9 @@ namespace SCANsat.SCAN_Map
 			}
 		}
 
-		private bool willRenderVisualGPU()
-		{
-			if (mType != mapType.Visual)
-				return false;
-
-			// Resource-overlay maps still use the CPU path (cache/indexing not ported yet).
-			if (resourceActive && SCANconfigLoader.GlobalResource && resource != null)
-				return false;
-
-			if (SCAN_UI_Loader.VisualCompositeShader == null || body == null || data == null || SCANcontroller.controller == null)
-				return false;
-
-			return SCANcontroller.controller.getScaledSpaceSource(body, out _, out _, out _, out _);
-		}
-
 		// Renders the Visual map on the GPU, sampling the body's ORIGINAL ScaledSpace textures so
 		// no readable CPU copy is needed (that copy is the RSS RAM hog). Returns false (CPU
-		// fallback) when not eligible - see willRenderVisualGPU.
+		// fallback) when not eligible - see willRenderGPU.
 		private bool tryRenderGPU()
 		{
 			if (!willRenderGPU(mType))
@@ -1216,25 +1201,6 @@ namespace SCANsat.SCAN_Map
 			tex.Apply(false);
 		}
 
-		// (dead code, replaced by ensureDataTex/uploadDataRow) full-texture upload:
-		private void uploadFloatTexture(ref Texture2D tex, float[,] src)
-		{
-			if (src == null) return;
-			if (tex == null || tex.width != mapwidth || tex.height != mapheight)
-			{
-				if (tex != null) UnityEngine.Object.Destroy(tex);
-				tex = new Texture2D(mapwidth, mapheight, TextureFormat.RFloat, false);
-				tex.wrapMode = TextureWrapMode.Clamp;
-			}
-			if (gpuDataBuf == null || gpuDataBuf.Length != mapwidth * mapheight)
-				gpuDataBuf = new Color[mapwidth * mapheight];
-			for (int y = 0; y < mapheight; y++)
-				for (int x = 0; x < mapwidth; x++)
-					gpuDataBuf[y * mapwidth + x] = new Color(src[x, y], 0f, 0f, 0f);
-			tex.SetPixels(gpuDataBuf);
-			tex.Apply(false);
-		}
-
 		// Upload resourceCache (geographic resW x resH) as an R-float abundance texture (fraction 0..1).
 		// Build resourceCache (stock abundance) - the GPU paths (Visual short-circuit, fake-sweep fast
 		// path) skip the prep loop that normally builds it, and resetResourceMap clears it every reset.
@@ -1406,29 +1372,36 @@ namespace SCANsat.SCAN_Map
 			Color unscanned = SCAN_Settings_Config.Instance.UnscannedColor;
 			unscanned.a *= SCAN_Settings_Config.Instance.UnscannedTransparency;
 
+			// GPU non-Visual modes composite into visualRenderTex and never colourise the CPU map,
+			// so skip its ~4 MB Texture2D + the background fill; the sweep uses mapwidth/mapheight.
+			bool gpuNonVisual = mType != mapType.Visual && willRenderGPU(mType);
+
 			if (map == null)
 			{
-				map = new Texture2D(mapwidth, mapheight, TextureFormat.ARGB32, false);
-				pix = map.GetPixels32();
-				Color background = SCAN_Settings_Config.Instance.MapBackgroundColor;
-				background.a *= SCAN_Settings_Config.Instance.BackgroundTransparency;
-				for (int i = 0; i < pix.Length; ++i)
+				if (!gpuNonVisual)
 				{
-					pix[i] = background;
-				}
+					map = new Texture2D(mapwidth, mapheight, TextureFormat.ARGB32, false);
+					pix = map.GetPixels32();
+					Color background = SCAN_Settings_Config.Instance.MapBackgroundColor;
+					background.a *= SCAN_Settings_Config.Instance.BackgroundTransparency;
+					for (int i = 0; i < pix.Length; ++i)
+					{
+						pix[i] = background;
+					}
 
-				map.SetPixels32(pix);
-				mapline = new double[map.width];
-				pix = new Color32[mapwidth];
+					map.SetPixels32(pix);
+					mapline = new double[mapwidth];
+					pix = new Color32[mapwidth];
+				}
 			}
-			else if (mapstep >= map.height)
+			else if (mapstep >= mapheight)
 			{
 				return map;
 			}
 
-			if (palette.redline == null || palette.redline.Length != map.width)
+			if (palette.redline == null || palette.redline.Length != mapwidth)
 			{
-				palette.redline = new Color32[map.width];
+				palette.redline = new Color32[mapwidth];
 				for (int i = 0; i < palette.redline.Length; ++i)
 				{
 					palette.redline[i] = palette.Red;
@@ -1470,7 +1443,7 @@ namespace SCANsat.SCAN_Map
 			// the GPU biome map reads index 0 everywhere and draws a single flat colour.
 			bool gpuBiomeNeedsIndex = willRenderGPU(mapType.Biome);
 
-			for (int i = 0; i < map.width; i++)
+			for (int i = 0; i < mapwidth; i++)
 			{
 				/* Introduce altimetry check here; Use unprojected lat/long coordinates
 				 * All cached altimetry data stored in a single 2D array in rectangular format
@@ -1483,7 +1456,7 @@ namespace SCANsat.SCAN_Map
 
 				if (mType != mapType.Visual)
 				{
-					if (body.pqsController != null && cache && mapstep + 1 < map.height)
+					if (body.pqsController != null && cache && mapstep + 1 < mapheight)
 					{
 						if (big_heightmap[i, mapstep + 1] == 0f)
 						{
