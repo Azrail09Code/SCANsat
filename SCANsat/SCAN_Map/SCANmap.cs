@@ -685,7 +685,11 @@ namespace SCANsat.SCAN_Map
 			private Texture2D paletteLUT;
 			private float[,] biome_indexmap;
 			private Color[] gpuDataBuf;
+			private Color[] gpuRowBuf;
+			private bool resourceTexReady;
 			private int paletteLUTHash;
+			private bool gpuDataComplete;   // the non-Visual data cache is fully sampled for gpuDataHash's config
+			private int gpuDataHash;        // config (body/mode/projection/size/offsets) the cached data is valid for
 		// The GPU compositor draws the whole Visual map in one Blit; these drive a purely
 		// cosmetic scanline reveal (in the CPU path's row order) so it matches the CPU modes' look.
 		// sweepStep advances one row per getPartialMap call (the pump calls it MapGenerationSpeed
@@ -795,6 +799,7 @@ namespace SCANsat.SCAN_Map
 			gpuRendered = false;
 			gpuSweepDone = false;
 			sweepStep = 0;
+			resourceTexReady = false;
 			resourceActive = resourceOn;
 			if (SCANconfigLoader.GlobalResource && setRes)
 			{ //Make sure that a resource is initialized if necessary
@@ -863,6 +868,19 @@ namespace SCANsat.SCAN_Map
 			// mType is set (via MType or the resetMap(mode,...) overload) before every call
 			// here, so this covers map-type switches that don't go through setBody.
 			refreshVisualMapTexture();
+
+			// Instant re-colour: if the GPU data cache is already fully sampled for this exact config
+			// (a colourisation-only change - palette/clamp/terminator - leaves the config hash the same),
+			// skip the re-sweep. Jump to the last row so the next getPartialMap re-Blits once with the
+			// rebuilt LUT over the cached data textures instead of re-sampling PQS across the whole map.
+			if (gpuDataComplete && gpuDataHash == gpuConfigHash() && willRenderGPU(mType)
+				&& (mType == mapType.Altimetry || mType == mapType.Slope || mType == mapType.Biome))
+			{
+				mapstep = mapheight - 1;
+				gpuRendered = true;
+				gpuSweepDone = false;      // one more getPartialMap call does the re-Blit
+				resourceTexReady = false;  // resource colours may have changed too
+			}
 		}
 
 		public void resetMap(mapType mode, bool Cache, bool resourceOn, bool setRes = true)
@@ -1075,8 +1093,7 @@ namespace SCANsat.SCAN_Map
 		{
 			if (mType == mapType.Altimetry || mType == mapType.Slope)
 			{
-				uploadFloatTexture(ref elevationTex, big_heightmap);
-				compositeMaterial.SetTexture("_ElevationTex", elevationTex);
+				compositeMaterial.SetTexture("_ElevationTex", elevationTex);   // uploaded incrementally per row in getPartialMap
 
 				float tMin, tRange;
 				if (useCustomRange) { tMin = customMin; tRange = customRange; }
@@ -1101,8 +1118,7 @@ namespace SCANsat.SCAN_Map
 			}
 			else if (mType == mapType.Biome)
 			{
-				uploadFloatTexture(ref biomeIndexTex, biome_indexmap);
-				compositeMaterial.SetTexture("_BiomeIndexTex", biomeIndexTex);
+				compositeMaterial.SetTexture("_BiomeIndexTex", biomeIndexTex);   // uploaded incrementally per row in getPartialMap
 				compositeMaterial.SetColor("_LowBiomeColor", SCANcontroller.controller.lowBiomeColor32);
 				compositeMaterial.SetColor("_HighBiomeColor", SCANcontroller.controller.highBiomeColor32);
 				compositeMaterial.SetFloat("_BiomeTransparency", SCAN_Settings_Config.Instance.BiomeTransparency);
@@ -1114,7 +1130,7 @@ namespace SCANsat.SCAN_Map
 			compositeMaterial.SetFloat("_ResourceActive", resOn ? 1f : 0f);
 			if (resOn)
 			{
-				uploadResourceTexture();
+				if (!resourceTexReady) { uploadResourceTexture(); resourceTexReady = true; }   // resourceCache is built once in the prep pass
 				compositeMaterial.SetTexture("_ResourceTex", resourceTex);
 				float minR = useCustomRange ? customResourceMin : resource.CurrentBody.MinValue;
 				float maxR = useCustomRange ? customResourceMax : resource.CurrentBody.MaxValue;
@@ -1126,7 +1142,51 @@ namespace SCANsat.SCAN_Map
 			}
 		}
 
-		// Upload a float[w,h] geographic cache into an R-float texture (texel [x,y] = cache[x,y]).
+		// Config key (body/mode/projection/size/offsets). If it matches the value cached when the data
+		// finished sampling, the change was colourisation-only (palette/clamp/terminator) and we can
+		// instant-recolour from the cached data textures instead of re-sweeping the whole map.
+		private int gpuConfigHash()
+		{
+			int h = body != null ? body.flightGlobalsIndex : -1;
+			h = h * 31 + (int)mType;
+			h = h * 31 + (int)projection;
+			h = h * 31 + mapwidth;
+			h = h * 31 + lon_offset.GetHashCode();
+			h = h * 31 + lat_offset.GetHashCode();
+			h = h * 31 + centeredLat.GetHashCode();
+			h = h * 31 + centeredLong.GetHashCode();
+			return h;
+		}
+
+		// Ensure the mode's R-float data texture exists (cleared to 0). Rows are then uploaded
+		// incrementally by uploadDataRow as the CPU prep loop fills the cache, so we never rebuild
+		// the whole texture per frame - only the newly-scanned row changes.
+		private void ensureDataTex(ref Texture2D tex)
+		{
+			if (tex != null && tex.width == mapwidth && tex.height == mapheight) return;
+			if (tex != null) UnityEngine.Object.Destroy(tex);
+			tex = new Texture2D(mapwidth, mapheight, TextureFormat.RFloat, false);
+			tex.wrapMode = TextureWrapMode.Clamp;
+			if (gpuDataBuf == null || gpuDataBuf.Length != mapwidth * mapheight)
+				gpuDataBuf = new Color[mapwidth * mapheight];
+			System.Array.Clear(gpuDataBuf, 0, gpuDataBuf.Length);
+			tex.SetPixels(gpuDataBuf);
+			tex.Apply(false);
+		}
+
+		// Upload one geographic row (src column y=row) into the data texture.
+		private void uploadDataRow(Texture2D tex, float[,] src, int row)
+		{
+			if (tex == null || src == null || row < 0 || row >= mapheight) return;
+			if (gpuRowBuf == null || gpuRowBuf.Length != mapwidth)
+				gpuRowBuf = new Color[mapwidth];
+			for (int x = 0; x < mapwidth; x++)
+				gpuRowBuf[x] = new Color(src[x, row], 0f, 0f, 0f);
+			tex.SetPixels(0, row, mapwidth, 1, gpuRowBuf);
+			tex.Apply(false);
+		}
+
+		// (dead code, replaced by ensureDataTex/uploadDataRow) full-texture upload:
 		private void uploadFloatTexture(ref Texture2D tex, float[,] src)
 		{
 			if (src == null) return;
@@ -1395,15 +1455,30 @@ namespace SCANsat.SCAN_Map
 			// we advance it and flag complete like the CPU path.
 			if (mType != mapType.Visual && willRenderGPU(mType))
 			{
-				if (mType == mapType.Biome)
+				// Incrementally upload just the row(s) the prep loop above filled - not the whole
+				// texture per frame. Altimetry/Slope fill big_heightmap[.,mapstep+1] (look-ahead; row 0
+				// was filled at mapstep=-1); Biome fills biomeIndex[.] for the current row.
+				if (mType == mapType.Altimetry || mType == mapType.Slope)
 				{
-					for (int bi = 0; bi < mapwidth && mapstep < mapheight; bi++)
+					ensureDataTex(ref elevationTex);
+					if (mapstep == 0) uploadDataRow(elevationTex, big_heightmap, 0);
+					uploadDataRow(elevationTex, big_heightmap, mapstep + 1);
+				}
+				else if (mType == mapType.Biome)
+				{
+					for (int bi = 0; bi < mapwidth; bi++)
 						biome_indexmap[bi, mapstep] = (float)biomeIndex[bi];
+					ensureDataTex(ref biomeIndexTex);
+					uploadDataRow(biomeIndexTex, biome_indexmap, mapstep);
 				}
 				tryRenderGPU();
 				mapstep++;
 				if (mapstep >= mapheight)
+				{
 					gpuSweepDone = true;
+					gpuDataComplete = true;          // data cache fully sampled...
+					gpuDataHash = gpuConfigHash();    // ...for this config (enables instant-recolour)
+				}
 				return map;
 			}
 
