@@ -933,9 +933,12 @@ namespace SCANsat.SCAN_Map
 			switch (m)
 			{
 				case mapType.Visual: return SCANcontroller.controller.getScaledSpaceSource(body, out _, out _, out _, out _);
+				// Altimetry/Slope/Biome need the filled CPU caches (big_heightmap / biome_indexmap),
+				// which only the cache=true map (BigMap, via setWidth) allocates + fills. ZoomMap/RPM
+				// (cache=false, setSize) keep the CPU path for these modes; Visual GPU still works there.
 				case mapType.Altimetry:
-				case mapType.Slope: return pqs;
-				case mapType.Biome: return biomeMap;
+				case mapType.Slope: return pqs && cache;
+				case mapType.Biome: return biomeMap && cache;
 				default: return false;
 			}
 		}
