@@ -677,6 +677,8 @@ namespace SCANsat.SCAN_Map
 		private RenderTexture visualRenderTex;
 		private Material compositeMaterial;
 		private Texture2D coverageFlags;
+		private Color32[] coverageFlagsBuf;   // reused CPU buffer for coverageFlags (no per-frame alloc)
+		private bool coverageFlagsDirty = true;   // set each resetMap; rebuild the coverage texture once per pass, not per sweep row
 		private bool gpuRendered;
 			// GPU data textures for the non-Visual modes (all-modes port). Elevation/biome/resource
 			// upload from the CPU caches (big_heightmap / biome_indexmap / resourceCache); a 1-D palette
@@ -809,6 +811,7 @@ namespace SCANsat.SCAN_Map
 			sweepStep = 0;
 			resourceTexReady = false;
 			resourceCacheReady = false;
+			coverageFlagsDirty = true;   // new pass: refresh the GPU coverage stencil once from live coverage
 			resourceActive = resourceOn;
 			if (SCANconfigLoader.GlobalResource && setRes)
 			{ //Make sure that a resource is initialized if necessary
@@ -1006,7 +1009,12 @@ namespace SCANsat.SCAN_Map
 			if (visualRenderTex == null || visualRenderTex.width != mapwidth || visualRenderTex.height != mapheight)
 			{
 				if (visualRenderTex != null)
+				{
+					// Release() frees the GPU surface but not the RT object; Destroy the wrapper too
+					// or the old RenderTexture leaks until finalization on every resize.
 					visualRenderTex.Release();
+					UnityEngine.Object.Destroy(visualRenderTex);
+				}
 
 				visualRenderTex = new RenderTexture(mapwidth, mapheight, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
 				visualRenderTex.wrapMode = TextureWrapMode.Clamp;
@@ -1085,7 +1093,7 @@ namespace SCANsat.SCAN_Map
 		{
 			if (visualRenderTex == null || visualRenderTex.width != mapwidth || visualRenderTex.height != mapheight)
 			{
-				if (visualRenderTex != null) visualRenderTex.Release();
+				if (visualRenderTex != null) { visualRenderTex.Release(); UnityEngine.Object.Destroy(visualRenderTex); }
 				visualRenderTex = new RenderTexture(mapwidth, mapheight, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
 				visualRenderTex.wrapMode = TextureWrapMode.Clamp;
 				RenderTexture prev = RenderTexture.active;
@@ -1316,15 +1324,25 @@ namespace SCANsat.SCAN_Map
 
 		private void updateCoverageFlags()
 		{
+			bool created = false;
 			if (coverageFlags == null)
 			{
 				coverageFlags = new Texture2D(360, 180, TextureFormat.RGBA32, false);
 				coverageFlags.filterMode = FilterMode.Point;
 				coverageFlags.wrapMode = TextureWrapMode.Clamp;
+				created = true;
 			}
 
+			// Coverage only changes between render passes (resetMap sets coverageFlagsDirty), never
+			// within the per-row sweep - so rebuild + GPU-upload once per pass instead of on every
+			// tryRenderGPU call. The CPU buffer is a reused member, so the sweep allocates nothing.
+			if (!created && !coverageFlagsDirty)
+				return;
+
+			if (coverageFlagsBuf == null)
+				coverageFlagsBuf = new Color32[360 * 180];
+
 			Int16[,] cov = data.Coverage;
-			Color32[] flags = new Color32[360 * 180];
 
 			for (int x = 0; x < 360; x++)
 			{
@@ -1335,12 +1353,13 @@ namespace SCANsat.SCAN_Map
 					// exposes every bit (Altimetry 0/1, VisualLoRes 2, Biome 3, VisualHiRes 6,
 					// Resource 7/8) with one texture, vs the old 4-bit RGBA pack.
 					int c = cov[x, y];
-					flags[y * 360 + x] = new Color32((byte)(c & 0xFF), (byte)((c >> 8) & 0xFF), 0, 255);
+					coverageFlagsBuf[y * 360 + x] = new Color32((byte)(c & 0xFF), (byte)((c >> 8) & 0xFF), 0, 255);
 				}
 			}
 
-			coverageFlags.SetPixels32(flags);
+			coverageFlags.SetPixels32(coverageFlagsBuf);
 			coverageFlags.Apply(false);
+			coverageFlagsDirty = false;
 		}
 
 		/* MAP: build: map to Texture2D */
@@ -1445,6 +1464,12 @@ namespace SCANsat.SCAN_Map
 			Texture2D readableScaledSpaceMap = SCANcontroller.controller.getVisualMapTexture(body);
 			Texture2D readableScaledSpaceNormalMap = SCANcontroller.controller.getVisualMapNormalTexture(body);
 
+			// The CPU path only needs biomeIndex when drawing biome borders (it colourises from
+			// stockBiomeColor); the GPU path colourises stock biomes from _BiomeLUT[biomeIndex], so
+			// it needs biomeIndex filled every pixel regardless of the border toggle. Without this
+			// the GPU biome map reads index 0 everywhere and draws a single flat colour.
+			bool gpuBiomeNeedsIndex = willRenderGPU(mapType.Biome);
+
 			for (int i = 0; i < map.width; i++)
 			{
 				/* Introduce altimetry check here; Use unprojected lat/long coordinates
@@ -1504,7 +1529,7 @@ namespace SCANsat.SCAN_Map
 					switch (mSource)
 					{
 						case mapSource.BigMap:
-							if (SCAN_Settings_Config.Instance.BigMapBiomeBorder)
+							if (SCAN_Settings_Config.Instance.BigMapBiomeBorder || gpuBiomeNeedsIndex)
 							{
 								biomeIndex[i] = SCANUtil.getBiomeIndexFraction(body, lon, lat);
 							}
@@ -1512,7 +1537,7 @@ namespace SCANsat.SCAN_Map
 							break;
 						case mapSource.ZoomMap:
 						case mapSource.RPM:
-							if (SCAN_Settings_Config.Instance.ZoomMapBiomeBorder)
+							if (SCAN_Settings_Config.Instance.ZoomMapBiomeBorder || gpuBiomeNeedsIndex)
 							{
 								biomeIndex[i] = SCANUtil.getBiomeIndexFraction(body, lon, lat);
 							}
