@@ -52,7 +52,9 @@ Shader "Hidden/SCANsat/VisualComposite"
 			sampler2D _ElevationTex;    // geographic mapW x mapH, R = raw elevation (metres); from big_heightmap
 			sampler2D _BiomeIndexTex;   // geographic mapW x mapH, R = biome index fraction [0,1]
 			sampler2D _ResourceTex;     // geographic resW x resH, R = abundance fraction [0,1]; from resourceCache
-			sampler2D _PaletteLUT;      // 1-D (Nx1) elevation colour ramp baked from heightToColor
+			sampler2D _PaletteLUT;      // 1-D (Nx1) elevation colour ramp baked from heightToColor (colour)
+			sampler2D _PaletteGreyLUT;  // 1-D grey ramp for LoRes-only altimetry (nowColor=false)
+			sampler2D _BiomeLUT;        // 1-D (biomeCount x1) stock biome mapColors, indexed by biome fraction
 
 			// Projection / map framing (mirror SCANmap fields)
 			float _MapWidth;
@@ -85,6 +87,8 @@ Shader "Hidden/SCANsat/VisualComposite"
 			float4 _HighBiomeColor;
 			float _BiomeTransparency;
 			float _BiomeBorder;     // 1 draw white biome borders
+			float _StockBiomes;     // 1 use stock biome mapColors (_BiomeLUT), 0 low/high gradient
+			float _BiomeCount;      // number of biomes (for the _BiomeLUT index)
 
 			// Resource overlay
 			float _ResourceActive;  // 1 apply resource overlay on top of the base colour
@@ -281,7 +285,8 @@ Shader "Hidden/SCANsat/VisualComposite"
 					{
 						float elev = tex2D(_ElevationTex, geoUV).r;
 						float t = _TerrainRange > 0.0 ? saturate((elev - _TerrainMin) / _TerrainRange) : 0.5;
-						col = tex2D(_PaletteLUT, float2(t, 0.5));
+						// HiRes -> colour ramp; LoRes-only -> grey ramp (matches CPU nowColor).
+						col = covHas(cov, 1.0) ? tex2D(_PaletteLUT, float2(t, 0.5)) : tex2D(_PaletteGreyLUT, float2(t, 0.5));
 						col.a = 1.0;
 					}
 				}
@@ -319,8 +324,11 @@ Shader "Hidden/SCANsat/VisualComposite"
 						else
 						{
 							// SCANsat low/high gradient (stock-biome LUT path handled CPU-side for now).
-							float4 g = lerp(_LowBiomeColor, _HighBiomeColor, bIdx);
-							col = lerp(g, _ClearColor, _BiomeTransparency);
+							// stock mapColor (LUT by biome fraction) or low/high gradient, + grey elevation underlay
+						float4 g = _StockBiomes > 0.5 ? tex2D(_BiomeLUT, float2(bIdx + 0.5 / max(_BiomeCount, 1.0), 0.5)) : lerp(_LowBiomeColor, _HighBiomeColor, bIdx);
+						float belev = tex2D(_ElevationTex, geoUV).r;
+						float eg = _TerrainRange > 0.0 ? saturate((belev - _TerrainMin) / _TerrainRange) : 0.5;
+							col = lerp(g, float4(eg, eg, eg, 1.0), _BiomeTransparency);
 							col.a = 1.0;
 						}
 					}

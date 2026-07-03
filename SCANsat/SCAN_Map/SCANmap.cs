@@ -555,6 +555,8 @@ namespace SCANsat.SCAN_Map
 			if (biomeIndexTex != null) { UnityEngine.Object.Destroy(biomeIndexTex); biomeIndexTex = null; }
 			if (resourceTex != null) { UnityEngine.Object.Destroy(resourceTex); resourceTex = null; }
 			if (paletteLUT != null) { UnityEngine.Object.Destroy(paletteLUT); paletteLUT = null; }
+			if (paletteGreyLUT != null) { UnityEngine.Object.Destroy(paletteGreyLUT); paletteGreyLUT = null; }
+			if (biomeLUT != null) { UnityEngine.Object.Destroy(biomeLUT); biomeLUT = null; }
 		}
 
 		internal void centerAround(double lon, double lat)
@@ -683,6 +685,10 @@ namespace SCANsat.SCAN_Map
 			private Texture2D biomeIndexTex;
 			private Texture2D resourceTex;
 			private Texture2D paletteLUT;
+			private Texture2D paletteGreyLUT;   // LoRes-only altimetry grey ramp
+			private Texture2D biomeLUT;         // stock biome mapColors
+			private int biomeLUTCount;
+			private CelestialBody biomeLUTBody;
 			private float[,] biome_indexmap;
 			private Color[] gpuDataBuf;
 			private Color[] gpuRowBuf;
@@ -1106,6 +1112,7 @@ namespace SCANsat.SCAN_Map
 				{
 					buildPaletteLUT(tMin, tRange);
 					compositeMaterial.SetTexture("_PaletteLUT", paletteLUT);
+					compositeMaterial.SetTexture("_PaletteGreyLUT", paletteGreyLUT);
 				}
 				else
 				{
@@ -1124,6 +1131,15 @@ namespace SCANsat.SCAN_Map
 				compositeMaterial.SetFloat("_BiomeTransparency", SCAN_Settings_Config.Instance.BiomeTransparency);
 				bool border = mSource == mapSource.BigMap ? SCAN_Settings_Config.Instance.BigMapBiomeBorder : SCAN_Settings_Config.Instance.ZoomMapBiomeBorder;
 				compositeMaterial.SetFloat("_BiomeBorder", border ? 1f : 0f);
+				buildBiomeLUT();
+				compositeMaterial.SetTexture("_BiomeLUT", biomeLUT);
+				compositeMaterial.SetFloat("_BiomeCount", biomeLUTCount);
+				compositeMaterial.SetFloat("_StockBiomes", (SCAN_Settings_Config.Instance.BigMapStockBiomes && colorMap) ? 1f : 0f);
+				// elevation underlay: biome blends its colour with grey elevation by BiomeTransparency
+				compositeMaterial.SetTexture("_ElevationTex", elevationTex);
+				float bRange = data.TerrainConfig.MaxTerrain - data.TerrainConfig.MinTerrain;
+				compositeMaterial.SetFloat("_TerrainMin", data.TerrainConfig.MinTerrain);
+				compositeMaterial.SetFloat("_TerrainRange", bRange <= 0f ? 1f : bRange);
 			}
 
 			bool resOn = resourceActive && SCANconfigLoader.GlobalResource && resource != null;
@@ -1225,6 +1241,25 @@ namespace SCANsat.SCAN_Map
 
 		// Bake heightToColor across [min, min+range] into a 1-D LUT so the shader is a plain fetch and
 		// the map matches the legend (which calls the same heightToColor) by construction.
+		// 1-D LUT of the body's stock biome mapColors, indexed by the biome fraction. Cached per body.
+		private void buildBiomeLUT()
+		{
+			if (body.BiomeMap == null) return;
+			int n = body.BiomeMap.Attributes.Length;
+			if (biomeLUT != null && biomeLUTCount == n && biomeLUTBody == body) return;
+			if (biomeLUT != null) UnityEngine.Object.Destroy(biomeLUT);
+			int w = Mathf.Max(n, 1);
+			biomeLUT = new Texture2D(w, 1, TextureFormat.RGBA32, false);
+			biomeLUT.filterMode = FilterMode.Point;
+			biomeLUT.wrapMode = TextureWrapMode.Clamp;
+			Color[] c = new Color[w];
+			for (int i = 0; i < n; i++) c[i] = body.BiomeMap.Attributes[i].mapColor;
+			biomeLUT.SetPixels(c);
+			biomeLUT.Apply(false);
+			biomeLUTCount = n;
+			biomeLUTBody = body;
+		}
+
 		private void buildPaletteLUT(float min, float range)
 		{
 			int hash = data.TerrainConfig.ColorPal.Hash ^ (colorMap ? 1 : 0) ^ min.GetHashCode() ^ range.GetHashCode() ^ (useCustomRange ? 2 : 0);
@@ -1235,16 +1270,27 @@ namespace SCANsat.SCAN_Map
 				paletteLUT = new Texture2D(1024, 1, TextureFormat.RGBA32, false);
 				paletteLUT.wrapMode = TextureWrapMode.Clamp;
 			}
+			if (paletteGreyLUT == null)
+			{
+				paletteGreyLUT = new Texture2D(1024, 1, TextureFormat.RGBA32, false);
+				paletteGreyLUT.wrapMode = TextureWrapMode.Clamp;
+			}
 			Color[] lut = new Color[1024];
+			Color[] grey = new Color[1024];
 			for (int x = 0; x < 1024; x++)
 			{
 				float val = min + (x / 1023f) * range;
 				lut[x] = useCustomRange
 					? (Color)palette.heightToColor(val, colorMap, data.TerrainConfig, customMin, customMax, customRange, true)
 					: (Color)palette.heightToColor(val, colorMap, data.TerrainConfig);
+				grey[x] = useCustomRange
+					? (Color)palette.heightToColor(val, false, data.TerrainConfig, customMin, customMax, customRange, true)
+					: (Color)palette.heightToColor(val, false, data.TerrainConfig);
 			}
 			paletteLUT.SetPixels(lut);
 			paletteLUT.Apply(false);
+			paletteGreyLUT.SetPixels(grey);
+			paletteGreyLUT.Apply(false);
 			paletteLUTHash = hash;
 		}
 
@@ -1470,6 +1516,9 @@ namespace SCANsat.SCAN_Map
 						biome_indexmap[bi, mapstep] = (float)biomeIndex[bi];
 					ensureDataTex(ref biomeIndexTex);
 					uploadDataRow(biomeIndexTex, biome_indexmap, mapstep);
+					ensureDataTex(ref elevationTex);   // for the biome elevation underlay
+					if (mapstep == 0) uploadDataRow(elevationTex, big_heightmap, 0);
+					uploadDataRow(elevationTex, big_heightmap, mapstep + 1);
 				}
 				tryRenderGPU();
 				mapstep++;
