@@ -532,6 +532,8 @@ namespace SCANsat.SCAN_Map
 			stopLine = mapheight - 1;
 			/* big map caching */
 			big_heightmap = new float[mapwidth, mapheight];
+			biome_indexmap = new float[mapwidth, mapheight];
+			gpuDataBuf = new Color[mapwidth * mapheight];
 			if (map != null)
 				UnityEngine.Object.Destroy(map);
 			map = null;
@@ -549,6 +551,10 @@ namespace SCANsat.SCAN_Map
 			if (compositeMaterial != null) { UnityEngine.Object.Destroy(compositeMaterial); compositeMaterial = null; }
 			if (visualRenderTex != null) { visualRenderTex.Release(); UnityEngine.Object.Destroy(visualRenderTex); visualRenderTex = null; }
 			if (exporter != null) { UnityEngine.Object.Destroy(exporter.gameObject); exporter = null; }
+			if (elevationTex != null) { UnityEngine.Object.Destroy(elevationTex); elevationTex = null; }
+			if (biomeIndexTex != null) { UnityEngine.Object.Destroy(biomeIndexTex); biomeIndexTex = null; }
+			if (resourceTex != null) { UnityEngine.Object.Destroy(resourceTex); resourceTex = null; }
+			if (paletteLUT != null) { UnityEngine.Object.Destroy(paletteLUT); paletteLUT = null; }
 		}
 
 		internal void centerAround(double lon, double lat)
@@ -670,6 +676,16 @@ namespace SCANsat.SCAN_Map
 		private Material compositeMaterial;
 		private Texture2D coverageFlags;
 		private bool gpuRendered;
+			// GPU data textures for the non-Visual modes (all-modes port). Elevation/biome/resource
+			// upload from the CPU caches (big_heightmap / biome_indexmap / resourceCache); a 1-D palette
+			// LUT baked from heightToColor colourizes altimetry (legend parity). Shader branches _MapMode.
+			private Texture2D elevationTex;
+			private Texture2D biomeIndexTex;
+			private Texture2D resourceTex;
+			private Texture2D paletteLUT;
+			private float[,] biome_indexmap;
+			private Color[] gpuDataBuf;
+			private int paletteLUTHash;
 		// The GPU compositor draws the whole Visual map in one Blit; these drive a purely
 		// cosmetic scanline reveal (in the CPU path's row order) so it matches the CPU modes' look.
 		// sweepStep advances one row per getPartialMap call (the pump calls it MapGenerationSpeed
@@ -740,7 +756,7 @@ namespace SCANsat.SCAN_Map
 			// The readable copy is only needed by the CPU Visual renderer. Skip it when the GPU
 			// compositor will handle this map (shader present, resource overlay off, source ready);
 			// otherwise load it so the CPU path always has its input.
-			if (mType == mapType.Visual && !willRenderVisualGPU())
+			if (mType == mapType.Visual && !willRenderGPU(mapType.Visual))
 				SCANcontroller.controller.LoadVisualMapTexture_Renamed(body, mSource);
 			else
 				SCANcontroller.controller.UnloadVisualMapTexture(body, mSource);
@@ -910,6 +926,20 @@ namespace SCANsat.SCAN_Map
 		// True when the GPU compositor is expected to render this map, so the readable CPU copy
 		// can be skipped. Mirrors tryRenderVisualGPU's eligibility: Visual mode, resource overlay
 		// off, composite shader present, and the body's ScaledSpace source textures ready.
+		private bool willRenderGPU(mapType m)
+		{
+			if (SCAN_UI_Loader.VisualCompositeShader == null || body == null || data == null || SCANcontroller.controller == null)
+				return false;
+			switch (m)
+			{
+				case mapType.Visual: return SCANcontroller.controller.getScaledSpaceSource(body, out _, out _, out _, out _);
+				case mapType.Altimetry:
+				case mapType.Slope: return pqs;
+				case mapType.Biome: return biomeMap;
+				default: return false;
+			}
+		}
+
 		private bool willRenderVisualGPU()
 		{
 			if (mType != mapType.Visual)
@@ -928,9 +958,9 @@ namespace SCANsat.SCAN_Map
 		// Renders the Visual map on the GPU, sampling the body's ORIGINAL ScaledSpace textures so
 		// no readable CPU copy is needed (that copy is the RSS RAM hog). Returns false (CPU
 		// fallback) when not eligible - see willRenderVisualGPU.
-		private bool tryRenderVisualGPU()
+		private bool tryRenderGPU()
 		{
-			if (!willRenderVisualGPU())
+			if (!willRenderGPU(mType))
 				return false;
 
 			Shader shader = SCAN_UI_Loader.VisualCompositeShader;
@@ -976,12 +1006,18 @@ namespace SCANsat.SCAN_Map
 			unscanned.a *= SCAN_Settings_Config.Instance.UnscannedTransparency;
 			compositeMaterial.SetColor("_UnscannedColor", unscanned);
 			compositeMaterial.SetColor("_ClearColor", palette.Clear);
+				Color greyCol = palette.Grey; greyCol.a = 1f;
+				compositeMaterial.SetColor("_GreyColor", greyCol);
+
+				// Mode select + the non-Visual data textures / LUTs / overlay uniforms.
+				compositeMaterial.SetFloat("_MapMode", (float)(int)mType);
+				setModeUniforms();
 
 			// Advance the cosmetic scanline one row per call, matching the CPU path's one-line-
 			// per-call cadence (mapstep++). We re-composite with the reveal fraction each call so
 			// the RawImage - already pointed at visualRenderTex - animates in place. Same background
 			// colour the CPU path clears to (SCANmap.cs getPartialMap map-init), redline = palette.Red.
-			if (!gpuSweepDone)
+			if (mType == mapType.Visual && !gpuSweepDone)
 			{
 				sweepStep++;
 				if (sweepStep >= mapheight)
@@ -992,18 +1028,140 @@ namespace SCANsat.SCAN_Map
 			background.a *= SCAN_Settings_Config.Instance.BackgroundTransparency;
 			compositeMaterial.SetColor("_MapBackgroundColor", background);
 			compositeMaterial.SetColor("_RedlineColor", palette.Red);
-			compositeMaterial.SetFloat("_SweepY", mapheight > 0 ? Mathf.Clamp01((float)sweepStep / mapheight) : 1f);
+			float gpuSweepRow = mType == mapType.Visual ? sweepStep : mapstep + 1;
+				compositeMaterial.SetFloat("_SweepY", mapheight > 0 ? Mathf.Clamp01(gpuSweepRow / mapheight) : 1f);
 
 			Graphics.Blit(null, visualRenderTex, compositeMaterial);
 
 			gpuRendered = true;                       // DisplayTexture returns the RT during the sweep
-			if (gpuSweepDone)
+			if (mType == mapType.Visual && gpuSweepDone)
 				mapstep = mapheight;                  // mark complete for the legacy mapstep-based checks
 			return true;
 		}
 
 		// Uploads the coverage bitmask as a 360x180 texture the composite shader samples as a
 		// per-pixel stencil: R=VisualHiRes, G=VisualLoRes, B=ResourceHiRes, A=ResourceLoRes.
+		// GPU mode data helpers:
+
+		// Per-mode data textures + uniforms for tryRenderGPU. Visual's ScaledSpace textures are set by
+		// the caller; here we upload the CPU-cache data for Altimetry/Slope/Biome + the resource overlay.
+		private void setModeUniforms()
+		{
+			if (mType == mapType.Altimetry || mType == mapType.Slope)
+			{
+				uploadFloatTexture(ref elevationTex, big_heightmap);
+				compositeMaterial.SetTexture("_ElevationTex", elevationTex);
+
+				float tMin, tRange;
+				if (useCustomRange) { tMin = customMin; tRange = customRange; }
+				else { tMin = data.TerrainConfig.MinTerrain; tRange = data.TerrainConfig.MaxTerrain - data.TerrainConfig.MinTerrain; }
+				if (tRange <= 0f) tRange = 1f;
+				compositeMaterial.SetFloat("_TerrainMin", tMin);
+				compositeMaterial.SetFloat("_TerrainRange", tRange);
+
+				if (mType == mapType.Altimetry)
+				{
+					buildPaletteLUT(tMin, tRange);
+					compositeMaterial.SetTexture("_PaletteLUT", paletteLUT);
+				}
+				else
+				{
+					compositeMaterial.SetFloat("_SlopeCutoff", SCAN_Settings_Config.Instance.SlopeCutoff);
+					compositeMaterial.SetColor("_SlopeLoColorOne", SCANcontroller.controller.lowSlopeColorOne32);
+					compositeMaterial.SetColor("_SlopeHiColorOne", SCANcontroller.controller.highSlopeColorOne32);
+					compositeMaterial.SetColor("_SlopeLoColorTwo", SCANcontroller.controller.lowSlopeColorTwo32);
+					compositeMaterial.SetColor("_SlopeHiColorTwo", SCANcontroller.controller.highSlopeColorTwo32);
+				}
+			}
+			else if (mType == mapType.Biome)
+			{
+				uploadFloatTexture(ref biomeIndexTex, biome_indexmap);
+				compositeMaterial.SetTexture("_BiomeIndexTex", biomeIndexTex);
+				compositeMaterial.SetColor("_LowBiomeColor", SCANcontroller.controller.lowBiomeColor32);
+				compositeMaterial.SetColor("_HighBiomeColor", SCANcontroller.controller.highBiomeColor32);
+				compositeMaterial.SetFloat("_BiomeTransparency", SCAN_Settings_Config.Instance.BiomeTransparency);
+				bool border = mSource == mapSource.BigMap ? SCAN_Settings_Config.Instance.BigMapBiomeBorder : SCAN_Settings_Config.Instance.ZoomMapBiomeBorder;
+				compositeMaterial.SetFloat("_BiomeBorder", border ? 1f : 0f);
+			}
+
+			bool resOn = resourceActive && SCANconfigLoader.GlobalResource && resource != null;
+			compositeMaterial.SetFloat("_ResourceActive", resOn ? 1f : 0f);
+			if (resOn)
+			{
+				uploadResourceTexture();
+				compositeMaterial.SetTexture("_ResourceTex", resourceTex);
+				float minR = useCustomRange ? customResourceMin : resource.CurrentBody.MinValue;
+				float maxR = useCustomRange ? customResourceMax : resource.CurrentBody.MaxValue;
+				compositeMaterial.SetColor("_ResMinColor", resource.MinColor32);
+				compositeMaterial.SetColor("_ResMaxColor", resource.MaxColor32);
+				compositeMaterial.SetFloat("_ResMinRange", minR);
+				compositeMaterial.SetFloat("_ResMaxRange", maxR);
+				compositeMaterial.SetFloat("_ResTransparency", resource.Transparency / 100f);
+			}
+		}
+
+		// Upload a float[w,h] geographic cache into an R-float texture (texel [x,y] = cache[x,y]).
+		private void uploadFloatTexture(ref Texture2D tex, float[,] src)
+		{
+			if (src == null) return;
+			if (tex == null || tex.width != mapwidth || tex.height != mapheight)
+			{
+				if (tex != null) UnityEngine.Object.Destroy(tex);
+				tex = new Texture2D(mapwidth, mapheight, TextureFormat.RFloat, false);
+				tex.wrapMode = TextureWrapMode.Clamp;
+			}
+			if (gpuDataBuf == null || gpuDataBuf.Length != mapwidth * mapheight)
+				gpuDataBuf = new Color[mapwidth * mapheight];
+			for (int y = 0; y < mapheight; y++)
+				for (int x = 0; x < mapwidth; x++)
+					gpuDataBuf[y * mapwidth + x] = new Color(src[x, y], 0f, 0f, 0f);
+			tex.SetPixels(gpuDataBuf);
+			tex.Apply(false);
+		}
+
+		// Upload resourceCache (geographic resW x resH) as an R-float abundance texture (fraction 0..1).
+		private void uploadResourceTexture()
+		{
+			if (resourceCache == null) return;
+			if (resourceTex == null || resourceTex.width != resourceMapWidth || resourceTex.height != resourceMapHeight)
+			{
+				if (resourceTex != null) UnityEngine.Object.Destroy(resourceTex);
+				resourceTex = new Texture2D(resourceMapWidth, resourceMapHeight, TextureFormat.RFloat, false);
+				resourceTex.wrapMode = TextureWrapMode.Clamp;
+			}
+			Color[] buf = new Color[resourceMapWidth * resourceMapHeight];
+			for (int y = 0; y < resourceMapHeight; y++)
+				for (int x = 0; x < resourceMapWidth; x++)
+					buf[y * resourceMapWidth + x] = new Color(resourceCache[x, y] / 100f, 0f, 0f, 0f);
+			resourceTex.SetPixels(buf);
+			resourceTex.Apply(false);
+		}
+
+		// Bake heightToColor across [min, min+range] into a 1-D LUT so the shader is a plain fetch and
+		// the map matches the legend (which calls the same heightToColor) by construction.
+		private void buildPaletteLUT(float min, float range)
+		{
+			int hash = data.TerrainConfig.ColorPal.Hash ^ (colorMap ? 1 : 0) ^ min.GetHashCode() ^ range.GetHashCode() ^ (useCustomRange ? 2 : 0);
+			if (paletteLUT != null && paletteLUTHash == hash)
+				return;
+			if (paletteLUT == null)
+			{
+				paletteLUT = new Texture2D(1024, 1, TextureFormat.RGBA32, false);
+				paletteLUT.wrapMode = TextureWrapMode.Clamp;
+			}
+			Color[] lut = new Color[1024];
+			for (int x = 0; x < 1024; x++)
+			{
+				float val = min + (x / 1023f) * range;
+				lut[x] = useCustomRange
+					? (Color)palette.heightToColor(val, colorMap, data.TerrainConfig, customMin, customMax, customRange, true)
+					: (Color)palette.heightToColor(val, colorMap, data.TerrainConfig);
+			}
+			paletteLUT.SetPixels(lut);
+			paletteLUT.Apply(false);
+			paletteLUTHash = hash;
+		}
+
 		private void updateCoverageFlags()
 		{
 			if (coverageFlags == null)
@@ -1041,7 +1199,7 @@ namespace SCANsat.SCAN_Map
 				return new Texture2D(1, 1);
 			}
 
-			if (tryRenderVisualGPU())
+			if (mType == mapType.Visual && tryRenderGPU())
 			{
 				return map;
 			}
@@ -1196,6 +1354,24 @@ namespace SCANsat.SCAN_Map
 			if (mapstep <= -1)
 			{
 				mapstep++;
+				return map;
+			}
+
+			// GPU render for the non-Visual modes: the prep loop above did the unavoidable PQS/biome
+			// sampling into the CPU caches (big_heightmap / biomeIndex); skip the CPU colourize loop,
+			// upload the data, and let the shader colourize. tryRenderGPU reads mapstep for the sweep;
+			// we advance it and flag complete like the CPU path.
+			if (mType != mapType.Visual && willRenderGPU(mType))
+			{
+				if (mType == mapType.Biome)
+				{
+					for (int bi = 0; bi < mapwidth && mapstep < mapheight; bi++)
+						biome_indexmap[bi, mapstep] = (float)biomeIndex[bi];
+				}
+				tryRenderGPU();
+				mapstep++;
+				if (mapstep >= mapheight)
+					gpuSweepDone = true;
 				return map;
 			}
 
