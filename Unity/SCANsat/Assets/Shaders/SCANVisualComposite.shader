@@ -313,10 +313,13 @@ Shader "Hidden/SCANsat/VisualComposite"
 				{
 					if (covHas(cov, 3.0))
 					{
-						float bIdx = tex2D(_BiomeIndexTex, geoUV).r;
+						// biome_indexmap is filled per rendered pixel (unprojected) = map-pixel space, NOT the
+					// geographic equirect grid the elevation cache uses - so sample it at the fragment uv.
+					float2 bpix = float2(i.uv.x, vy);
+					float bIdx = tex2D(_BiomeIndexTex, bpix).r;
 						float2 tx = float2(1.0 / _MapWidth, 1.0 / _MapHeight);
-						float bL = tex2D(_BiomeIndexTex, geoUV - float2(tx.x, 0)).r;
-						float bD = tex2D(_BiomeIndexTex, geoUV - float2(0, tx.y)).r;
+						float bL = tex2D(_BiomeIndexTex, bpix - float2(tx.x, 0)).r;
+						float bD = tex2D(_BiomeIndexTex, bpix - float2(0, tx.y)).r;
 						if (_BiomeBorder > 0.5 && (abs(bIdx - bL) > 0.0001 || abs(bIdx - bD) > 0.0001))
 						{
 							col = float4(1.0, 1.0, 1.0, 1.0);   // palette.White border

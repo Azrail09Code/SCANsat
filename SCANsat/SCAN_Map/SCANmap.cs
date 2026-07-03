@@ -881,6 +881,7 @@ namespace SCANsat.SCAN_Map
 			// skip the re-sweep. Jump to the last row so the next getPartialMap re-Blits once with the
 			// rebuilt LUT over the cached data textures instead of re-sampling PQS across the whole map.
 			if (gpuDataComplete && gpuDataHash == gpuConfigHash() && willRenderGPU(mType)
+				&& !(resourceActive && SCANconfigLoader.GlobalResource && resource != null)   // resource maps need the prep to rebuild resourceCache (resetResourceMap clears it)
 				&& (mType == mapType.Altimetry || mType == mapType.Slope || mType == mapType.Biome))
 			{
 				mapstep = 0;               // replay the sweep from the top...
