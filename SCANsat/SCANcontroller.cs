@@ -35,6 +35,317 @@ using palette = SCANsat.SCAN_UI.UI_Framework.SCANcolorUtil;
 
 namespace SCANsat
 {
+	public class SCANtextures
+	{
+		/* Game Loaded Data */
+		public CelestialBody body;
+		public Texture2D cachedVisualMap = null;
+		public Texture2D cachedNormalMap = null;
+
+		/* Memory Mapped Data (requires SCANSAT_BODY_TEXTURES config) */
+		public CPUTexture2D memoryMappedHeightMap = null;
+		public CPUTexture2D memoryMappedNormalMap = null;
+		public CPUTexture2D memoryMappedVisualMap = null;
+
+		public SCANtextures(CelestialBody b)
+		{
+			body = b;
+
+			ConfigNode[] visualOverrides = GameDatabase.Instance.GetConfigNodes("SCANSAT_BODY_TEXTURES");
+
+			for (int i = 0; i < visualOverrides.Length; i++)
+			{
+				ConfigNode node = visualOverrides[i];
+				if (node.HasValue("name"))
+				{
+					string bodyName = node.GetValue("name");
+					if (bodyName == b.name)
+					{
+						GetMemoryMappedTexturesFromConfig(node);
+						break;
+					}
+				}
+			}
+
+			CacheMapTexturesFromBody();
+			SCANUtil.SCANlog(TextureState());  // Log whether using memory mapped or RAM buffered textures
+		}
+
+		private Texture2D readableTexture(Texture tex, Material mat)
+		{
+			if (tex == null)
+			{
+				return null;
+			}
+
+			Texture2D readable = new Texture2D(tex.width, tex.height);
+
+			var rt = RenderTexture.GetTemporary(tex.width, tex.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB, 1);
+
+			if (mat != null)
+			{
+				Graphics.Blit(tex, rt, mat);
+			}
+			else
+			{
+				Graphics.Blit(tex, rt);
+			}
+
+			RenderTexture.active = rt;
+
+			readable.ReadPixels(new Rect(0, 0, tex.width, tex.height), 0, 0);
+
+			RenderTexture.active = null;
+			RenderTexture.ReleaseTemporary(rt);
+
+			rt = null;
+
+			readable.Apply();
+
+			tex = null;
+
+			return readable;
+		}
+
+		public void GetMemoryMappedTexturesFromConfig(ConfigNode node)
+		{
+			string bodyName = node.GetValue("name");
+			if (bodyName == body.name)
+			{
+				string baseFolder = System.IO.Directory.GetParent(KSPUtil.ApplicationRootPath).FullName;
+
+				// Attempt to load heightMap
+				if (memoryMappedHeightMap == null && node.GetValue("heightMap") != null)
+				{
+					string heightMapCPUTextureName = (baseFolder + '/' + node.GetValue("heightMap")).Replace("\\", "/");
+					CPUTextureHandle heightMap = TextureLoader.LoadCPUTexture(heightMapCPUTextureName);
+					if (heightMap.IsError)
+					{
+						Log.Error($"[{body.name}] Height Map Path not defined: {heightMapCPUTextureName}");
+					}
+					else
+					{
+						memoryMappedHeightMap = heightMap.GetTexture();
+					}
+				}
+
+				// Attempt to load normalMap
+				if (memoryMappedNormalMap == null && node.GetValue("normalMap") != null)
+				{
+					string normalMapCPUTextureName = (baseFolder + '/' + node.GetValue("normalMap")).Replace("\\", "/");
+					CPUTextureHandle normalMap = TextureLoader.LoadCPUTexture(normalMapCPUTextureName);
+					if (normalMap.IsError)
+					{
+						Log.Error($"[{body.name}] Normal Map Path not defined: {normalMapCPUTextureName}");
+					}
+					else
+					{
+						memoryMappedNormalMap = normalMap.GetTexture();
+					}
+				}
+
+				// Attempt to load colorMap
+				if (memoryMappedVisualMap == null && node.GetValue("colorMap") != null)
+				{
+					string colorMapCPUTextureName = (baseFolder + '/' + node.GetValue("colorMap")).Replace("\\", "/");
+					CPUTextureHandle colorMap = TextureLoader.LoadCPUTexture(colorMapCPUTextureName);
+					if (colorMap.IsError)
+					{
+						Log.Error($"[{body.name}] Visual Data path not loaded: {colorMapCPUTextureName}");
+					}
+					else
+					{
+						memoryMappedVisualMap = colorMap.GetTexture();
+					}
+				}
+			}
+		}
+
+		public void CacheMapTexturesFromBody()
+		{
+			Material material = null;
+			string colorMapTextureName = null;
+			string normalMapTextureName = null;
+			bool useMaterialForColorMap = true;
+
+			if (body.scaledBody == null)
+			{
+				return;
+			}
+
+			MeshRenderer scaledMesh = body.scaledBody.GetComponent<MeshRenderer>();
+
+			if (scaledMesh == null)
+			{
+				return;
+			}
+
+			material = scaledMesh.sharedMaterial; // TODO: what if there are multiple materials?  do we need to check all of them?
+			string shaderName = material.shader.name;
+
+			if (shaderName == "Terrain/Gas Giant")
+			{
+				colorMapTextureName = "_DetailCloudPatternTexture";
+				normalMapTextureName = "_NormalMap";
+			}
+			// HapkeScaled is the Sol shader which is also a Parallax-dependent instance
+			else if (shaderName.Contains("ParallaxScaled") || shaderName.Contains("HapkeScaled"))
+			{
+				SCANparallaxContinued.LoadParallax(body, ref material);
+				useMaterialForColorMap = false;
+				colorMapTextureName = "_ColorMap";
+				normalMapTextureName = "_BumpMap";
+			}
+			else if (material.HasProperty("_MainTex"))
+			{
+				colorMapTextureName = "_MainTex";
+			}
+			else if (material.HasProperty("_ColorMap"))
+			{
+				colorMapTextureName = "_ColorMap";
+			}
+
+			if (material.HasProperty("_BumpMap"))
+			{
+				normalMapTextureName = "_BumpMap";
+			}
+			else if (material.HasProperty("_NormalMap"))
+			{
+				normalMapTextureName = "_NormalMap";
+			}
+
+			// Only cache color / visual map if memory mapped visual map is not available and map not previously cached
+			if (memoryMappedVisualMap == null && cachedVisualMap == null && colorMapTextureName != null)
+			{
+				var sourceColorTexture = material.GetTexture(colorMapTextureName) as Texture2D;
+				if (sourceColorTexture != null)
+				{
+					cachedVisualMap = sourceColorTexture.isReadable ? sourceColorTexture : readableTexture(sourceColorTexture, useMaterialForColorMap ? material : null);
+				}
+				else
+				{
+					Log.Error($"Visual Map cached null texture for body {body.name}, material {material.name} and texture name {colorMapTextureName}");
+				}
+			}
+
+			// Only cache normal map if memory mapped normal map is not available and map not previously cached
+			if (memoryMappedNormalMap == null && cachedNormalMap == null && normalMapTextureName != null)
+			{
+				var sourceNormalTexture = material.GetTexture(normalMapTextureName) as Texture2D;
+				if (sourceNormalTexture != null)
+				{
+					cachedNormalMap = sourceNormalTexture.isReadable ? sourceNormalTexture : readableTexture(sourceNormalTexture, null);
+				}
+				else
+				{
+					Log.Error($"Normal Map cached null texture for body {body.name}, material {material.name} and texture name {normalMapTextureName}");
+				}
+			}
+		}
+		
+		public TextureFormat GetNormalFormat()
+		{
+			if (memoryMappedNormalMap != null)
+			{
+				return memoryMappedNormalMap.Format;
+			}
+			else if (cachedNormalMap != null)
+			{
+				return cachedNormalMap.format;
+			}
+			Log.Error($"No normal map textures defined for {body.bodyName}");
+			throw new NullReferenceException($"No normal map textures defined for {body.bodyName}");
+		}
+		public Color32 GetShadedVisualPixel(double lon, double lat)
+		{
+
+			float fLat = ((float)lat + 90f) / 180f;
+			float fLon = ((float)lon + 270f) / 360f;
+
+			if (fLon < 0) { fLon += 1; }
+			if (fLon > 1) { fLon -= 1; }
+			fLon = 1 - fLon;
+
+			fLat = Mathf.Clamp01(fLat);
+			fLon = Mathf.Clamp01(fLon);
+
+			Color32 c = palette.Grey;
+
+			// If no textures are loaded, return static
+			if (memoryMappedVisualMap != null)
+			{
+				c = memoryMappedVisualMap.GetPixelBilinear(fLon, fLat);
+			}
+			else if (cachedVisualMap != null)
+			{
+				c = cachedVisualMap.GetPixelBilinear(fLon, fLat);
+			}
+			else
+			{
+				return palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
+			}
+
+			// Set c to be fully opaque
+			c.a = 255;
+
+			// Attempt to load Normal map values
+			Color32 n;
+			if (memoryMappedNormalMap != null)
+			{
+				n = memoryMappedNormalMap.GetPixelBilinear(fLon, fLat);
+			}
+			else if (cachedNormalMap != null)
+			{
+				n = cachedNormalMap.GetPixelBilinear(fLon, fLat);
+			}
+			else
+			{
+				return c;  // No normal map, return the color as is
+			}
+
+			// Extract the Y channel from the normal map and normalize to range [0, 1]. lumOver of 0.5 is neutral
+			double lumOver = n.b / 255f;  // Base game KSP blue channel to store Y axis normal data
+
+			switch (GetNormalFormat())
+			{
+				case TextureFormat.BC5:
+					lumOver = n.g / 255f;  // BC5 stores X in red and Y in green (Z not stored)
+					break;
+				case TextureFormat.DXT5:
+					lumOver = n.g / 255f;  // DXT5 stores X in alpha and Y in green (Z not stored)
+					break;
+				default:
+					break;
+			}
+
+			HslColor hslBase = palette.ConvertRgbToHsl(c);
+
+			double opacity = 0.8;
+			double lum = hslBase.L;
+
+			if (lum > 0.5d)
+			{
+				lum = (opacity * (1 - (1 - (2 * (lumOver - 0.5))) * (1 - lum))) + (1 - opacity) * lum;
+				lum = (opacity * lum) + (1 - opacity) * lum;
+			}
+			else
+			{
+				lum = (opacity * (2 * lumOver * lum)) + (1 - opacity) * lum;
+			}
+
+			c = palette.ConvertHslToRgb(hslBase.H, hslBase.S, lum);
+			return c;
+		}
+
+		public string TextureState()
+		{
+			string colorMapState = memoryMappedVisualMap != null ? "Memory Mapped" : (cachedVisualMap != null ? "RAM Buffered" : "None");
+			string normalMapState = memoryMappedNormalMap != null ? "Memory Mapped" : (cachedNormalMap != null ? "RAM Buffered" : "None");
+
+			return $"{body.name} Visual Map Texture: {colorMapState}, Normal Map Texture: {normalMapState}";
+		}
+	}
+
 	[KSPScenario(ScenarioCreationOptions.AddToAllGames | ScenarioCreationOptions.AddToExistingGames, GameScenes.FLIGHT, GameScenes.SPACECENTER, GameScenes.TRACKSTATION)]
 	public class SCANcontroller : ScenarioModule
 	{
@@ -152,14 +463,9 @@ namespace SCANsat
 		private CelestialBody zoomMapBodyVisual;
 
 		/* Visual Map Texture Data */
-		private Dictionary<CelestialBody, Texture2D> cachedVisualMaps = new Dictionary<CelestialBody, Texture2D>();
+		private Dictionary<CelestialBody, SCANtextures> mapTextureHandler = new Dictionary<CelestialBody, SCANtextures>();
 		private CelestialBody bigMapBodyScaledSpace;
 		private CelestialBody zoomMapBodyScaledSpace;
-
-		/* Memory Mapped Data (requires SCANSAT_BODY_TEXTURES config) */
-		private Dictionary<CelestialBody, CPUTexture2D> memoryMappedHeightMaps = new Dictionary<CelestialBody, CPUTexture2D>();
-		private Dictionary<CelestialBody, CPUTexture2D> memoryMappedNormalMaps = new Dictionary<CelestialBody, CPUTexture2D>();
-		private Dictionary<CelestialBody, CPUTexture2D> memoryMappedVisualMaps = new Dictionary<CelestialBody, CPUTexture2D>();
 
 		private SCAN_UI_MainMap _mainMap;
 		private SCAN_UI_Instruments _instruments;
@@ -244,90 +550,30 @@ namespace SCANsat
 			}
 
 			// Check if a texture is present in either dictionary
-			if (cachedVisualMaps.GetValueOrDefault(b) != null || memoryMappedVisualMaps.GetValueOrDefault(b) != null)
+			if (mapTextureHandler.GetValueOrDefault(b) != null)
 			{
-				return true;
+				if (mapTextureHandler[b].memoryMappedVisualMap != null || mapTextureHandler[b].cachedVisualMap != null)
+				{
+					return true;
+				}
 			}
 
 			return false;
 		}
 
-
 		public Color32 GetShadedVisualPixel(CelestialBody b, double lon, double lat)
 		{
-
-			float fLat = ((float)lat + 90f) / 180f;
-			float fLon = ((float)lon + 270f) / 360f;
-
-			if (fLon < 0) { fLon += 1; }
-			if (fLon > 1) { fLon -= 1; }
-			fLon = 1 - fLon;
-
-			fLat = Mathf.Clamp01(fLat);
-			fLon = Mathf.Clamp01(fLon);
-
 			Color32 c = palette.Grey;
-			double lumOver = 0.5;
 
-			CPUTexture2D mappedColorMap = memoryMappedVisualMaps.GetValueOrDefault(b);
-			Texture2D cachedColorMap = cachedVisualMaps.GetValueOrDefault(b);
-
-			// If no textures are loaded, return static
-			if (mappedColorMap != null)
+			SCANtextures bodyTextures = mapTextureHandler.GetValueOrDefault(b);
+			if (bodyTextures != null)
 			{
-				c = mappedColorMap.GetPixelBilinear(fLon, fLat);
-			}
-			else if (cachedColorMap != null)
-			{
-				c = cachedColorMap.GetPixelBilinear(fLon, fLat);
-				lumOver = c.a / 255f;  // Use alpha channel to store Y axis normal data for cached textures
-			}
-			else
-			{
-				return palette.lerp(palette.Black, palette.White, UnityEngine.Random.value);
+				return bodyTextures.GetShadedVisualPixel(lon, lat);
 			}
 
-			c.a = 255; // Ensure map is fully opaque regardless of source texture alpha
-
-			// Attempt to load Normal map values
-			CPUTexture2D mappedNormalMap = memoryMappedNormalMaps.GetValueOrDefault(b);
-			if (mappedNormalMap != null)
-			{
-				Color32 n = mappedNormalMap.GetPixelBilinear(fLon, fLat);
-				// Extract the Y channel from the normal map and normalize to range [0, 1]
-				lumOver = n.b / 255f;  // Base game KSP blue channel to store Y axis normal data
-
-				switch (mappedNormalMap.Format)
-				{
-					case TextureFormat.BC5:
-						lumOver = n.g / 255f;  // BC5 stores X in red and Y in green (Z not stored)
-						break;
-					case TextureFormat.DXT5:
-						lumOver = n.g / 255f;  // DXT5 stores X in alpha and Y in green (Z not stored)
-						break;
-					default:
-						break;
-				}
-			}
-
-			HslColor hslBase = palette.ConvertRgbToHsl(c);
-
-			double opacity = 0.8;
-			double lum = hslBase.L;
-
-			if (lum > 0.5d)
-			{
-				lum = (opacity * (1 - (1 - (2 * (lumOver - 0.5))) * (1 - lum))) + (1 - opacity) * lum;
-				lum = (opacity * lum) + (1 - opacity) * lum;
-			}
-			else
-			{
-				lum = (opacity * (2 * lumOver * lum)) + (1 - opacity) * lum;
-			}
-
-			c = palette.ConvertHslToRgb(hslBase.H, hslBase.S, lum);
 			return c;
 		}
+
 
 		public static List<SCANterrainConfig> EncodeTerrainConfigs
 		{
@@ -409,7 +655,6 @@ namespace SCANsat
 			if (masterTerrainNodes.ContainsKey(name))
 			{
 				Log.Warning($"[{name}] Terrain Config already stored in SCANterrain Data Dictionary");
-				updateTerrainConfig(data);
 				return;
 			}
 
@@ -1617,138 +1862,6 @@ namespace SCANsat
 
 		}
 
-		void GetVisualMapTexturesForBody(CelestialBody b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName, out string normalMapTextureName)
-		{
-			material = null;
-			colorMapTextureName = null;
-			normalMapTextureName = null;
-			useMaterialForColorMap = true;
-
-			if (b.scaledBody == null)
-			{
-				return;
-			}
-
-			MeshRenderer scaledMesh = b.scaledBody.GetComponent<MeshRenderer>();
-
-			if (scaledMesh == null)
-			{
-				return;
-			}
-
-			material = scaledMesh.sharedMaterial; // TODO: what if there are multiple materials?  do we need to check all of them?
-			string shaderName = material.shader.name;
-
-			if (shaderName == "Terrain/Gas Giant")
-			{
-				colorMapTextureName = "_DetailCloudPatternTexture";
-				normalMapTextureName = "_NormalMap";
-				return;
-			}
-			// HapkeScaled is the Sol shader which is also a Parallax-dependent instance
-			else if (shaderName.Contains("ParallaxScaled") || shaderName.Contains("HapkeScaled"))
-			{
-				SCANparallaxContinued.LoadParallax(b, ref material);
-				useMaterialForColorMap = false;
-				string contains_main = material.HasProperty("_MainTex") ? " _MainTex" : null;
-				string contains_map = material.HasProperty("_ColorMap") ? "_ColorMap" : null;
-				string contains_cube = material.HasProperty("_ColorCube") ? "_ColorCube" : null;
-				SCANUtil.SCANdebugLog($"[{b.name}] Material uses Parallax and contains: {contains_main}, {contains_map}, {contains_cube}.");
-				colorMapTextureName = "_ColorMap";
-				normalMapTextureName = "_BumpMap";
-				return;
-			}
-			else if (material.HasProperty("_MainTex"))
-			{
-				colorMapTextureName = "_MainTex";
-			}
-			else if (material.HasProperty("_ColorMap"))
-			{
-				colorMapTextureName = "_ColorMap";
-			}
-
-			if (material.HasProperty("_BumpMap"))
-			{
-				normalMapTextureName = "_BumpMap";
-			}
-			else if (material.HasProperty("_NormalMap"))
-			{
-				normalMapTextureName = "_NormalMap";
-			}
-		}
-
-		/// Caches visual textures (colour map)
-		void CacheVisualTexture(CelestialBody b, Material material, string colorMapTextureName, string normalMapTextureName, bool useMaterialForColorMap)
-		{
-			if (cachedVisualMaps.GetValueOrDefault(b) != null || memoryMappedVisualMaps.GetValueOrDefault(b) != null)
-			{
-				return; // Already cached
-			}
-
-			Texture2D colorMap = null;
-			Texture2D normalMap = null;
-
-			try
-			{
-				// Load color map
-				if (colorMapTextureName != null)
-				{
-					var sourceColorTexture = material.GetTexture(colorMapTextureName) as Texture2D;
-					if (sourceColorTexture != null)
-					{
-						colorMap = sourceColorTexture.isReadable ? sourceColorTexture : readableTexture(sourceColorTexture, useMaterialForColorMap ? material : null);
-					}
-					else
-					{
-						Log.Error($"GetTexture returned a null texture for body {b.name}, material {material.name} and texture name {colorMapTextureName}");
-						return;
-					}
-				}
-
-				if (normalMapTextureName == null)
-				{
-					cachedVisualMaps.Add(b, colorMap);
-					return;  // No normal map, just cache the color map
-				}
-
-				var sourceNormalTexture = material.GetTexture(normalMapTextureName) as Texture2D;
-				if (sourceNormalTexture != null)
-				{
-					normalMap = sourceNormalTexture.isReadable ? sourceNormalTexture : readableTexture(sourceNormalTexture, null);
-
-					// Get pixel data
-					Color32[] colorPixels = colorMap.GetPixels32();
-					// Merge: Keep RGB from colorPixels, keep A from alphaPixels
-					Color32[] mergedPixels = new Color32[colorPixels.Length];
-
-					// Take the b channel for RGBA textures and g channel for BC5 and DXT5 and shove in alpha of colour
-					for (int i = 0; i < colorPixels.Length; i++)
-					{
-						float u = (float)(i % colorMap.width) / (colorMap.width - 1);
-						float v = (float)(i / colorMap.width) / (colorMap.height - 1);
-						Color32 visualPixel = colorMap.GetPixelBilinear(u, v);
-						Color32 normalPixel = normalMap.GetPixelBilinear(u, v);
-						mergedPixels[i] = new Color32(
-							visualPixel.r,
-							visualPixel.g,
-							visualPixel.b,
-							normalMap.format == TextureFormat.BC5 || normalMap.format == TextureFormat.DXT5 ? normalPixel.g : normalPixel.b
-						);
-					}
-
-					//// Update the existing texture instance with the merged pixel data
-					Texture2D combinedTexture = new Texture2D(colorMap.width, colorMap.height);
-					combinedTexture.SetPixels32(mergedPixels);
-					combinedTexture.Apply();
-					cachedVisualMaps.Add(b, combinedTexture);
-				}
-			}
-			catch (Exception e)
-			{
-				Log.Error($"Error caching visual texture from materials for body {b.name}: {e}");
-			}
-		}
-
 		internal void LoadVisualMapTexture_Renamed(CelestialBody b, mapSource s)
 		{
 			if (!SCAN_Settings_Config.Instance.VisibleMapsActive)
@@ -1771,77 +1884,13 @@ namespace SCANsat
 					break;
 			}
 
-			if (memoryMappedVisualMaps.GetValueOrDefault(b) != null)
+			if (mapTextureHandler.GetValueOrDefault(b) != null)
 			{
 				return; // Already cached
 			}
 
-			ConfigNode[] visualOverrides = GameDatabase.Instance.GetConfigNodes("SCANSAT_BODY_TEXTURES");
-
-			for (int i = 0; i < visualOverrides.Length; i++)
-			{
-				ConfigNode node = visualOverrides[i];
-				if (node.HasValue("name") && node.HasValue("colorMap"))
-				{
-					string bodyName = node.GetValue("name");
-					if (bodyName == b.name)
-					{
-						string baseFolder = System.IO.Directory.GetParent(KSPUtil.ApplicationRootPath).FullName;
-
-						// Attempt to load heightMap
-						if (!memoryMappedHeightMaps.ContainsKey(b))
-						{
-							string heightMapCPUTextureName = (baseFolder + '/' + node.GetValue("heightMap")).Replace("\\", "/");
-							CPUTextureHandle heightMap = TextureLoader.LoadCPUTexture(heightMapCPUTextureName);
-							if (heightMap.IsError)
-							{
-								Log.Error($"[{b.name}] Height Map Path not defined: {heightMapCPUTextureName}");
-								return;
-							}
-							memoryMappedHeightMaps.Add(b, heightMap.GetTexture());
-						}
-
-						// Attempt to load normalMap
-						if (!memoryMappedNormalMaps.ContainsKey(b))
-						{
-							string normalMapCPUTextureName = (baseFolder + '/' + node.GetValue("normalMap")).Replace("\\", "/");
-							CPUTextureHandle normalMap = TextureLoader.LoadCPUTexture(normalMapCPUTextureName);
-							if (normalMap.IsError)
-							{
-								Log.Error($"[{b.name}] Normal Map Path not defined: {normalMapCPUTextureName}");
-								return;
-							}
-							memoryMappedNormalMaps.Add(b, normalMap.GetTexture());
-						}
-
-						// Attempt to load colorMap
-						if (!memoryMappedVisualMaps.ContainsKey(b))
-						{
-							string colorMapCPUTextureName = (baseFolder + '/' + node.GetValue("colorMap")).Replace("\\", "/");
-							CPUTextureHandle colorMap = TextureLoader.LoadCPUTexture(colorMapCPUTextureName);
-							if (colorMap.IsError)
-							{
-								Log.Error($"[{b.name}] Visual Data path not loaded: {colorMapCPUTextureName}");
-								return;
-							}
-							memoryMappedVisualMaps.Add(b, colorMap.GetTexture());
-						}
-						return;
-					}
-				}
-			}
-
-			GetVisualMapTexturesForBody(b, out Material material, out bool useMaterialForColorMap, out string colorMapTextureName, out string normalMapTextureName);
-
-			if (material == null)
-			{
-				Log.Error($"GetVisualMapTexturesForBody returned a null material for body {b.name}");
-			}
-			else
-			{
-				// Load color map
-				CacheVisualTexture(b, material, colorMapTextureName, normalMapTextureName, useMaterialForColorMap);
-			}
+			// Load the textures for this body (either memory mapped, or RAM cached if memory mapping not available)
+			mapTextureHandler.Add(b, new SCANtextures(b));
 		}
 
 		internal void UnloadVisualMapTexture(CelestialBody b, mapSource s)
@@ -1878,55 +1927,20 @@ namespace SCANsat
 					break;
 			}
 
-			if (cachedVisualMaps.ContainsKey(b))
+			if (mapTextureHandler.ContainsKey(b))
 			{
-				GameObject.Destroy(cachedVisualMaps[b]);
-				cachedVisualMaps[b] = null;
-				cachedVisualMaps.Remove(b);
+				if (mapTextureHandler[b].cachedVisualMap != null)
+				{
+					GameObject.Destroy(mapTextureHandler[b].cachedVisualMap);
+				}
+				if (mapTextureHandler[b].cachedNormalMap != null)
+				{
+					GameObject.Destroy(mapTextureHandler[b].cachedNormalMap);
+				}
+
+				mapTextureHandler[b] = null;
+				mapTextureHandler.Remove(b);
 			}
-
-			if (memoryMappedVisualMaps.ContainsKey(b))
-			{
-				// TODO: Do I need to destroy these textures as well?
-				memoryMappedVisualMaps[b] = null;
-				memoryMappedVisualMaps.Remove(b);
-			}
-		}
-
-		private Texture2D readableTexture(Texture tex, Material mat)
-		{
-			if (tex == null)
-			{
-				return null;
-			}
-
-			Texture2D readable = new Texture2D(tex.width, tex.height);
-
-			var rt = RenderTexture.GetTemporary(tex.width, tex.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB, 1);
-
-			if (mat != null)
-			{
-				Graphics.Blit(tex, rt, mat);
-			}
-			else
-			{
-				Graphics.Blit(tex, rt);
-			}
-
-			RenderTexture.active = rt;
-
-			readable.ReadPixels(new Rect(0, 0, tex.width, tex.height), 0, 0);
-
-			RenderTexture.active = null;
-			RenderTexture.ReleaseTemporary(rt);
-
-			rt = null;
-
-			readable.Apply();
-
-			tex = null;
-
-			return readable;
 		}
 
 		private void OnGUI()
