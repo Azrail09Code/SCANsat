@@ -7,6 +7,7 @@
 > ![scan your planetoid like the big boys do][bigmap-scan-10000x]
 > ###### **Example SAR scan of Kerbin at 1000x and then 10,000x warp**
 
+[![][shield:support-ksptl]][ksptl:release]&nbsp;
 [![][shield:support-rpm]][RPM:release]&nbsp;
 [![][shield:support-mm]][mm:release]&nbsp;
 [![][shield:support-toolbar]][toolbar:release]&nbsp;
@@ -196,9 +197,12 @@ S.C.A.N. is proud to collaborate with other KSP mods and modding teams. Followin
 [**RasterPropMonitor**][rpm:release]  | 
 [**KSPTextureLoader**][ksptl:release]  | 
 
- **MM**, **RPM**, **MechJeb**, **KSPTextureLoader** and **Toolbar** are all **soft** dependencies. This means your experience with SCANsat will be enhanced if you are using these mods, but they are not necessary.
+ **MM**, **RPM**, **MechJeb** and **Toolbar** are all **soft** dependencies. This means your experience with SCANsat will be enhanced if you are using these mods, but they are not necessary.
+
+**KSPTextureLoader** is a built dependency, however, as all planets that have external texture files are strongly recommended to use memory mapped textures, with RAM cached variants only being a fallback. This ensures that no errors occur with shader configs and that the exact texture desired ends up displayed in game.
 
 **SCANsat** is built against the following mods:
+  * [x] [![][shield:support-ksptl]][ksptl:release]
   * [x] [![][shield:support-mm]][mm:release]
   * [x] [![][shield:support-rpm]][rpm:release]
   * [x] [![][shield:support-alcor]][alcor:release]
@@ -882,8 +886,9 @@ sneaky then they can of course be sneaky.
  
 [shield:jenkins-dev]: http://img.shields.io/jenkins/s/https/ksp.sarbian.com/jenkins/SCANsat-dev.svg
 [shield:jenkins-rel]: http://img.shields.io/jenkins/s/https/ksp.sarbian.com/jenkins/SCANsat-release.svg
-[shield:support-ksp]: http://img.shields.io/badge/for%20KSP-v1.4.1-bad455.svg
+[shield:support-ksp]: http://img.shields.io/badge/for%20KSP-v1.12.x-bad455.svg
 [shield:support-rpm]: http://img.shields.io/badge/works%20with%20RPM-v0.28.x-a31f34.svg
+[shield:support-ksptl]: https://img.shields.io/badge/requires%20KSPTextureLoader-1.0.34+-84e0d7.svg
 [shield:support-mm]: http://img.shields.io/badge/works%20with%20MM-v3.x-40b7c0.svg
 [shield:support-toolbar]: http://img.shields.io/badge/works%20with%20Blizzy's%20Toolbar-1.7.x-7c69c0.svg
 [shield:support-alcor]: http://img.shields.io/badge/works%20with%20ALCOR-0.9-299bc7.svg
