@@ -25,7 +25,8 @@
 * [1. Installation and Interoperability][1]
   * [a. Installation][1a]
   * [b. GameData Layout][1b]
-  * [c. Other Add-Ons][1c]
+  * [c. Texture Configurations][1c]
+  * [d. Other Add-Ons][1d]
 * [2. Types of Scans][2]
   * [a. Native SCANsat][2a]
 * [3. Resource Scanning][3]
@@ -165,7 +166,25 @@ For licensing information, please see the [included LICENSE.txt][SCANsat:rel-lic
 
 ![][SCANsat:gamedata]
 
-#### [:top:][top] 1c. Other Add-Ons 
+#### [:top:][top] 1c. Texture Configurations
+
+S.C.A.N. was originally designed to load all visual and normal textures into RAM directly from the game, as this doesn't require any additional configuration steps for planet packs to integrate directly with the mod. This, however, has led to performance issues with large scale textures and planet packs (notoriously Real Solar System scale packs like Sol).
+
+To get around this, support has been added for memory mapping external textures through KSPTextureLoader. This works by defining the relative path to the height, normal and color textures for each planet, and defining them in a config file as shown below (recommend making one for each body titled "BodyName_SCANsat.cfg"): 
+
+```
+SCANSAT_BODY_TEXTURES
+{
+    name = Mercury  // Use name of body in Kopernicus
+    heightMap = GameData/Sol-Textures/PluginData/01_Mercury/Kopernicus/Mercury_Height.dds
+    normalMap = GameData/Sol-Textures/PluginData/01_Mercury/Kopernicus/Mercury_Normal.dds
+    colorMap  = GameData/Sol-Textures/PluginData/01_Mercury/Kopernicus/Mercury_Color.dds
+}
+```
+
+With these paths defined, the CPU is able to pull data directly out of the texture from the file system without loading it into RAM. Planet pack makers are encouraged to use this new interface with their packs as this directly specifies the textures SCANsat will display in game.
+
+#### [:top:][top] 1d. Other Add-Ons 
 
 S.C.A.N. is proud to collaborate with other KSP mods and modding teams. Following is a table of all of the mods, add-ons, or software that we interoperate with.
 
@@ -175,12 +194,9 @@ S.C.A.N. is proud to collaborate with other KSP mods and modding teams. Followin
 [**Blizzy78's Toolbar**][toolbar:release] | [![Support for Karbonite][karbonite:logo]][karbonite:release]
 [**ModuleManager**][mm:release]  | [![Support for ALCOR][alcor:logo]][alcor:release]
 [**RasterPropMonitor**][rpm:release]  | 
+[**KSPTextureLoader**][ksptl:release]  | 
 
-* **SCANsat**
-  * [x] [**v16.0**][SCANsat:rel-thread] SCANsat Release **version: v16.0**
-  * [x] [**v15.0**][SCANsat:dev-thread] SCANsat Dev **version: v15.0**
-
- **MM**, **RPM**, **MechJeb**, and **Toolbar** are all **soft** dependencies. This means your experience with SCANsat will be enhanced if you are using these mods, but they are not necessary.
+ **MM**, **RPM**, **MechJeb**, **KSPTextureLoader** and **Toolbar** are all **soft** dependencies. This means your experience with SCANsat will be enhanced if you are using these mods, but they are not necessary.
 
 **SCANsat** is built against the following mods:
   * [x] [![][shield:support-mm]][mm:release]
@@ -200,6 +216,8 @@ scanning modules or parts).
   * **RadarHi**: Advanced, High-Resolution RADAR Altimetry (in color, unlimited zoom)
   * **Slope**: Slope Data converted from RADAR data
   * **Biome**: Biome Detection and Classification (in color, unlimited zoom)
+  * **VisualLo**: Basic, Low-Resolution Visual Imaging (b&w, limited zoom)
+  * **VisualHi**: Full Color, High Resolution Visual Imaging
   * **Anomaly**: Anomaly Detection and Labeling
   * **Resource**: Scan for chemical or mineral resource on the surface.
 
@@ -815,7 +833,8 @@ sneaky then they can of course be sneaky.
 [1]: #top-1-installation-and-interoperability
 [1a]: #top-1a-installation
 [1b]: #top-1b-gamedata-layout
-[1c]: #top-1c-other-add-ons
+[1c]: #top-1c-texture-configurations
+[1d]: #top-1d-other-add-ons
 [2]: #top-2-types-of-scans
 [2a]: #top-2a-scansat-scans
 [3]: #top-3-resource-scanning
@@ -961,7 +980,9 @@ sneaky then they can of course be sneaky.
 
 [toolbar:release]: http://forum.kerbalspaceprogram.com/threads/60863
 
-[rpm:release]: http://forum.kerbalspaceprogram.com/threads/117471
+[rpm:release]: https://github.com/FirstPersonKSP/RasterPropMonitor/releases
+
+[ksptl:release]: https://github.com/Phantomical/KSPTextureLoader/releases
 
 [cconfig:release]: http://forum.kerbalspaceprogram.com/threads/101604
 
