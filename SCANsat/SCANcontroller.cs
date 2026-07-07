@@ -115,47 +115,53 @@ namespace SCANsat
 				string baseFolder = System.IO.Directory.GetParent(KSPUtil.ApplicationRootPath).FullName;
 
 				// Attempt to load heightMap
-				if (memoryMappedHeightMap == null && node.GetValue("heightMap") != null)
+				string heightMapPath = node.GetValue("heightMap");
+				if (memoryMappedHeightMap == null && heightMapPath != null)
 				{
-					string heightMapCPUTextureName = (baseFolder + '/' + node.GetValue("heightMap")).Replace("\\", "/");
+					string heightMapCPUTextureName = (baseFolder + '/' + heightMapPath).Replace("\\", "/");
 					CPUTextureHandle heightMap = TextureLoader.LoadCPUTexture(heightMapCPUTextureName);
-					if (heightMap.IsError)
-					{
-						Log.Error($"[{body.name}] Height Map Path not defined: {heightMapCPUTextureName}");
-					}
-					else
+					try
 					{
 						memoryMappedHeightMap = heightMap.GetTexture();
+					}
+					catch (Exception e)
+					{
+						Log.Error($"[{body.name}] Height Map Path not defined: {heightMapCPUTextureName}");
+						Log.Exception(e);
 					}
 				}
 
 				// Attempt to load normalMap
-				if (memoryMappedNormalMap == null && node.GetValue("normalMap") != null)
+				string normalMapPath = node.GetValue("normalMap");
+				if (memoryMappedNormalMap == null && normalMapPath != null)
 				{
-					string normalMapCPUTextureName = (baseFolder + '/' + node.GetValue("normalMap")).Replace("\\", "/");
+					string normalMapCPUTextureName = (baseFolder + '/' + normalMapPath).Replace("\\", "/");
 					CPUTextureHandle normalMap = TextureLoader.LoadCPUTexture(normalMapCPUTextureName);
-					if (normalMap.IsError)
-					{
-						Log.Error($"[{body.name}] Normal Map Path not defined: {normalMapCPUTextureName}");
-					}
-					else
+					try
 					{
 						memoryMappedNormalMap = normalMap.GetTexture();
+					}
+					catch (Exception e)
+					{
+						Log.Error($"[{body.name}] Normal Map Path not defined: {normalMapCPUTextureName}");
+						Log.Exception(e);
 					}
 				}
 
 				// Attempt to load colorMap
-				if (memoryMappedVisualMap == null && node.GetValue("colorMap") != null)
+				string visualMapPath = node.GetValue("colorMap");
+				if (memoryMappedVisualMap == null && visualMapPath != null)
 				{
-					string colorMapCPUTextureName = (baseFolder + '/' + node.GetValue("colorMap")).Replace("\\", "/");
+					string colorMapCPUTextureName = (baseFolder + '/' + visualMapPath).Replace("\\", "/");
 					CPUTextureHandle colorMap = TextureLoader.LoadCPUTexture(colorMapCPUTextureName);
-					if (colorMap.IsError)
-					{
-						Log.Error($"[{body.name}] Visual Data path not loaded: {colorMapCPUTextureName}");
-					}
-					else
+					try
 					{
 						memoryMappedVisualMap = colorMap.GetTexture();
+					}
+					catch (Exception e)
+					{
+						Log.Error($"[{body.name}] Visual Data path not loaded: {colorMapCPUTextureName}");
+						Log.Exception(e);
 					}
 				}
 			}
