@@ -13,6 +13,7 @@
 
 using KSP.UI;
 using SCANsat.SCAN_Data;
+using SCANsat.SCAN_Map;
 using SCANsat.SCAN_Toolbar;
 using SCANsat.SCAN_UI.UI_Framework;
 using SCANsat.Unity;
@@ -107,6 +108,7 @@ namespace SCANsat.SCAN_Unity
 			v = FlightGlobals.ActiveVessel;
 
 			data = SCANUtil.getData(v.mainBody);
+			SCANcontroller.controller.LoadVisualMapTexture_Renamed(v.mainBody, mapSource.Data);
 
 			if (data == null)
 			{
@@ -137,6 +139,7 @@ namespace SCANsat.SCAN_Unity
 			// TODO: make this smarter about not doing work if it doesn't need to
 
 			data = SCANUtil.getData(v.mainBody);
+			SCANcontroller.controller.LoadVisualMapTexture_Renamed(v.mainBody, mapSource.Data);
 
 			if (data == null)
 			{
@@ -389,6 +392,7 @@ namespace SCANsat.SCAN_Unity
 			v = FlightGlobals.ActiveVessel;
 
 			data = SCANUtil.getData(v.mainBody);
+			SCANcontroller.controller.LoadVisualMapTexture_Renamed(v.mainBody, mapSource.Data);
 
 			if (data == null)
 			{

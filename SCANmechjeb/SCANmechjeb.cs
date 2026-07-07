@@ -19,6 +19,7 @@ using MuMech;
 
 using UnityEngine;
 using UnityEngine.Events;
+using System.Reflection;
 
 namespace SCANmechjeb
 {
@@ -35,6 +36,31 @@ namespace SCANmechjeb
 		private Vector2d coords = new Vector2d();
 		private bool shutdown, mjOnboard, mjTechTreeLocked;
 
+		// Store references to required fields - type name changes between Target / Hidden and target / hidden across MechJeb versions
+		private static FieldInfo targetField;
+		private static FieldInfo hiddenField;
+
+		/// <summary>
+		/// Reflectively fetches MechJebCore fields, tolerating the
+		/// 'Target'/'target' field rename across MechJeb versions. Returns null
+		/// (and logs) if the field can't be resolved under any known name.
+		/// </summary>
+		static SCANmechjeb()
+		{
+			var t = new MechJebCore().GetType();
+			targetField = t.GetField("Target") ?? t.GetField("target");
+			if (targetField == null)
+			{
+				Log.Message("MechJebCore 'target' field could not be found under any known name; MechJeb support broken.");
+			}
+
+			hiddenField = t.GetField("Hidden") ?? t.GetField("hidden");
+			if (hiddenField == null)
+			{
+				Log.Message("MechJebGuidanceModule 'hidden' field could not be found under any known name; MechJeb support broken.");
+			}
+		}
+
 		#region Helpers
 
 		/// <summary>
@@ -44,14 +70,7 @@ namespace SCANmechjeb
 		/// </summary>
 		private static MechJebModuleTargetController GetMJCoreTarget(MechJebCore mjc)
 		{
-			var t = mjc.GetType();
-			var field = t.GetField("Target") ?? t.GetField("target");
-			if (field == null)
-			{
-				Log.Message("MechJebCore 'target' field could not be found under any known name; MechJeb support broken.");
-			}
-
-			return field?.GetValue(mjc) as MechJebModuleTargetController;
+			return targetField?.GetValue(mjc) as MechJebModuleTargetController;
 		}
 
 		/// <summary>
@@ -61,13 +80,7 @@ namespace SCANmechjeb
 		/// </summary>
 		private static bool? IsMJGuidanceModuleHidden(DisplayModule gm)
 		{
-			var t = gm.GetType();
-			var field = t.GetField("Hidden") ?? t.GetField("hidden");
-			if (field == null)
-			{
-				Log.Message("MechJebGuidanceModule 'hidden' field could not be found under any known name; MechJeb support broken.");
-			}
-			return field?.GetValue(gm) as bool?;
+			return hiddenField?.GetValue(gm) as bool?;
 		}
 
 		#endregion
