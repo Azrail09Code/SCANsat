@@ -148,11 +148,11 @@ namespace SCANsat.Unity.Unity
 			if (m_TypeLabel != null)
 			{
 				// Show initial display mode
-				string label = "Terrain";
+				string label = "Altimetry";
 				switch (map.MapType)
 				{
 					case (MainMapDisplayMode.Terrain):
-						label = "Terrain";
+						label = "Altimetry";
 						break;
 					case (MainMapDisplayMode.Biome):
 						label = "Biome";
@@ -574,7 +574,7 @@ namespace SCANsat.Unity.Unity
 				switch (nextMode)
 				{
 					case (MainMapDisplayMode.Terrain):
-						label = "Terrain";
+						label = "Altimetry";
 						break;
 					case (MainMapDisplayMode.Biome):
 						label = "Biome";
