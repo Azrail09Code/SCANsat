@@ -1712,6 +1712,17 @@ namespace SCANsat
 			if (cache.GetValueOrDefault(b) == null && textureName != null)
 			{
 				var sourceTexture = material.GetTexture(textureName) as Texture2D;
+
+				if (sourceTexture == null)
+				{
+					// Kopernicus OnDemand has the textures unloaded right now. That is expected whenever
+					// Visual mode is selected some time after setBody ran - the force-load happened back
+					// then, and loadOnDemandScaledSpace won't re-issue it (bigMapBodyVisual == b already).
+					// Ask for them directly and retry once; LoadOnDemand is synchronous.
+					SCANkopernicus.LoadOnDemand(b);
+					sourceTexture = material.GetTexture(textureName) as Texture2D;
+				}
+
 				if (sourceTexture == null)
 				{
 					Log.Error($"GetTexture returned a null texture for body {b.name}, material {material.name} and texture name {textureName}");
