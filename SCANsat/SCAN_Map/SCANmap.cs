@@ -534,6 +534,10 @@ namespace SCANsat.SCAN_Map
 			big_heightmap = new float[mapwidth, mapheight];
 			biome_indexmap = new float[mapwidth, mapheight];
 			gpuDataBuf = new Color[mapwidth * mapheight];
+			// Just wiped big_heightmap/biome_indexmap/gpuDataBuf. mapwidth is part of gpuConfigHash so
+			// the stale claim can't match today, but the caches are empty either way - don't leave a
+			// "data is complete" flag standing behind them.
+			invalidateGpuDataCache();
 			if (map != null)
 				UnityEngine.Object.Destroy(map);
 			map = null;
@@ -557,6 +561,32 @@ namespace SCANsat.SCAN_Map
 			if (paletteLUT != null) { UnityEngine.Object.Destroy(paletteLUT); paletteLUT = null; }
 			if (paletteGreyLUT != null) { UnityEngine.Object.Destroy(paletteGreyLUT); paletteGreyLUT = null; }
 			if (biomeLUT != null) { UnityEngine.Object.Destroy(biomeLUT); biomeLUT = null; }
+
+			// The GPU data cache just went away with those textures, so its bookkeeping must go too.
+			// bigmap/spotmap are STATIC: the SCANmap outlives this Destroy and gets reused next scene.
+			// Leaving gpuDataComplete/gpuDataHash set means resetMap's instant-recolour path matches on
+			// the next open with the same body+mode+projection+zoom, skips the whole sample sweep, and
+			// re-Blits from biomeIndexTex/elevationTex that are now null - a blank map until you switch
+			// body (which changes the hash) and back.
+			invalidateGpuDataCache();
+		}
+
+		/// <summary>
+		/// Drop every "the GPU already has valid data" claim. Anything that destroys or reallocates the
+		/// data textures / CPU caches must call this, or resetMap will trust a cache that isn't there.
+		/// </summary>
+		private void invalidateGpuDataCache()
+		{
+			gpuDataComplete = false;
+			gpuDataHash = 0;
+			gpuRendered = false;
+			gpuSweepDone = false;
+			gpuRecolorSweep = false;
+			resourceTexReady = false;
+			resourceCacheReady = false;
+			biomeLUTCount = 0;
+			biomeLUTBody = null;
+			paletteLUTHash = 0;
 		}
 
 		internal void centerAround(double lon, double lat)
