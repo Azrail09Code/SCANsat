@@ -37,8 +37,8 @@ namespace SCANmechjeb
 		private bool shutdown, mjOnboard, mjTechTreeLocked;
 
 		// Store references to required fields - type name changes between Target / Hidden and target / hidden across MechJeb versions
-		private static FieldInfo targetField;
-		private static FieldInfo hiddenField;
+		private readonly static FieldInfo targetField;
+		private readonly static FieldInfo hiddenField;
 
 		/// <summary>
 		/// Reflectively fetches MechJebCore fields, tolerating the

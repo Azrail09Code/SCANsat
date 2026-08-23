@@ -10,8 +10,8 @@
     <KSPBT_GenerateDependencyAttributes>true</KSPBT_GenerateDependencyAttributes>
   </PropertyGroup>
   <ItemGroup>
-    <KSPVersionFile Include="$(KSPBT_ModRoot)/SCANsat/SCANsat.version">
-      <Destination>$(KSPBT_ModRoot)/SCANsat/SCANsat.version</Destination>
+    <KSPVersionFile Include="$(KSPBT_ModRoot)/SCANsat.version">
+      <Destination>$(KSPBT_ModRoot)/SCANsat.version</Destination>
       <KSP_Version_Min>1.12.3</KSP_Version_Min>
     </KSPVersionFile>
   </ItemGroup>
