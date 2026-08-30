@@ -5,6 +5,7 @@ Python decoder of BallisticFox's Mirage files, designed to allow for decompressi
 """
 
 from enum import Enum
+from typing import Literal
 from os.path import getsize
 from pathlib import Path
 
@@ -84,81 +85,6 @@ def bitsFor(v: int) -> int:
     return n
 
 
-# <summary>Encode a raw little-endian R16 buffer with vertical-delta + zigzag + per-block bitpacking.</summary>
-# def vDeltaBitpackEncode(r16: bytes, width: int, height: int):
-#     """Encode raw little-endian."""
-#     count = width * height
-#     if (len(r16) < count * 2):
-#         raise ValueError("vdelta: source shorter than width*height*2")
-
-#     # Pass 1 — residuals. Needed up front because each block's bit width is the max over its residuals.
-#     zz = [-1 for _ in range(count)]
-
-#     for y in range(height):
-#         for x in range(width):
-#             i = y * width + x
-#             v = loadR16(r16, i)
-#             if y == 0:
-#                 pred = (0 if x == 0 else loadR16(r16, i - 1))
-#             else:
-#                 pred = loadR16(r16, i - width)
-
-#             d = (v - pred)
-#             zz[i] = (((d << 1) ^ (d >> 15)) & 0xFFFF)
-
-#     blockSize = 1 << VDeltaBlockLog
-#     nblocks = int((count + blockSize - 1) / blockSize)
-#     widths = []
-#     bits = 0
-#     for b in range(nblocks):
-#         s = b * blockSize
-#         e = min(s + blockSize, count)
-#         max_t = 0
-#         for i in range(s, e):
-#             if (zz[i] > max_t):
-#                 max_t = zz[i]
-#         widths.append(bitsFor(max_t))
-#         bits += widths[b] * (e - s)
-
-#     var outp = new byte[VDeltaHeaderBytes + nblocks + (int)((bits + 7) / 8)]
-#     outp[0] = (byte)width;
-#     outp[1] = (byte)(width >> 8);
-#     outp[2] = (byte)height;
-#     outp[3] = (byte)(height >> 8);
-#     outp[4] = VDeltaBlockLog;
-#     Buffer.BlockCopy(widths, 0, outp, VDeltaHeaderBytes, nblocks);
-
-#     outp = [0 for _ in range(VDeltaHeaderBytes + nblocks + int((bits + 7) / 8))]
-
-#         // Pass 2 — bitstream. accBits stays < 8 after each flush, so accBits + w <= 23 never overflows acc.
-#         int p = VDeltaHeaderBytes + nblocks;
-#         ulong acc = 0;
-#         int accBits = 0;
-#         for (int b = 0; b < nblocks; b++)
-#         {
-#             int w = widths[b];
-#             if (w == 0)
-#                 continue;
-#             int s = b * blockSize,
-#                 e = Math.Min(s + blockSize, count);
-#             for (int i = s; i < e; i++)
-#             {
-#                 acc |= (ulong)zz[i] << accBits;
-#                 accBits += w;
-#                 while (accBits >= 8)
-#                 {
-#                     outp[p++] = (byte)acc;
-#                     acc >>= 8;
-#                     accBits -= 8;
-#                 }
-#             }
-#         }
-#         if (accBits > 0)
-#             outp[p++] = (byte)acc;
-#         return outp;
-#     }
-
-
 def vDeltaBitpackDecode(
     src: bytes, srcOffset: int, srcLen: int, width: int, height: int
 ) -> bytes:
@@ -200,29 +126,30 @@ def vDeltaBitpackDecode(
         s = b * blockSize
         e = min(s + blockSize, count)
         x = s % width
-        y = s / width  # two divisions per block, not per texel
+        y = s // width  # two divisions per block, not per texel
         for i in range(s, e):
             z = 0
+
             if bw != 0:
                 while accBits < bw:
-                    p += 1
                     if p >= sEnd:
                         raise ValueError("vdelta: bitstream underrun")
                     acc |= src[p] << accBits
+                    p += 1
                     accBits += 8
 
                 z = acc & ((1 << bw) - 1)
                 acc >>= bw
                 accBits -= bw
 
-            d = (z >> 1) ^ (-(int)(z & 1) & 0x7FFF)  # un-zigzag
+            d = ((z >> 1) & 0xFFFF) ^ (0xFFFF if (z & 1) else 0)  # un-zigzag to uint16
             if y == 0:
                 pred = 0 if x == 0 else loadR16(r16, i - 1)
             else:
                 pred = loadR16(r16, i - width)
             v = pred + d
             r16[2 * i] = v & 0xFF
-            r16[2 * i + 1] = v >> 8
+            r16[2 * i + 1] = (v >> 8) & 0xFF
 
             x += 1
             if x == width:
@@ -440,10 +367,10 @@ class Tile:
                     raise ValueError("vdelta: truncated header")
                 w = self.payload[0] | (self.payload[1] << 8)
                 h = self.payload[2] | (self.payload[3] << 8)
-                if w * h * 2 != self.payload_len:
-                    raise ValueError(
-                        f"vdelta: payload dims {w}x{h} imply {w * h * 2} raw bytes, expected {self.payload_len}"
-                    )
+                # if w * h * 2 != self.payload_len:
+                #     raise ValueError(
+                #         f"vdelta: payload dims {w}x{h} imply {w * h * 2} raw bytes, received {self.payload_len}"
+                #     )
                 return vDeltaBitpackDecode(self.payload, 0, self.payload_len, w, h)
             case _:
                 raise ValueError(f"Unsupported Tile Codec {self.codec.name}")
@@ -503,12 +430,32 @@ class MirageTextureLoader:
         self.colour_blob = BlobFile(
             self.folder / Path(f"Level_{level}/canonical.color.L{level}.bin")
         )
+        self.normal_idx = IndexFile(
+            self.folder / Path(f"Level_{level}/canonical.normal.L{level}.idx")
+        )
+        self.normal_blob = BlobFile(
+            self.folder / Path(f"Level_{level}/canonical.normal.L{level}.bin")
+        )
+        self.height_idx = IndexFile(
+            self.folder / Path(f"Level_{level}/canonical.height.L{level}.idx")
+        )
+        self.height_blob = BlobFile(
+            self.folder / Path(f"Level_{level}/canonical.height.L{level}.bin")
+        )
 
-    def get_texture(self, index: int) -> NDArray:
+    def get_texture(
+        self, index: int, texture_type: Literal["colour", "normal", "height"]
+    ) -> NDArray:
+        if texture_type == "colour":
+            return self.get_colour_texture(index)
+        if texture_type == "normal":
+            return self.get_normal_texture(index)
+        return self.get_height_texture(index)
+
+    def get_colour_texture(self, index: int) -> NDArray:
         """Get the tile texture at the given index."""
         tile = self.colour_blob.get_tile(self.colour_idx.get_idx(index))
-        dds_bytestream = tile.decodeTilePayload()  # BC7 bytestream
-
+        dds_bytestream = tile.decodeTilePayload()
         square = self.colour_blob.tile_size + 2 * self.colour_blob.border_px
         img_bytes = texture2ddecoder.decode_bc7(dds_bytestream, square, square)
         img = Image.frombytes("RGBA", (square, square), img_bytes, "raw", ("BGRA"))
@@ -516,37 +463,46 @@ class MirageTextureLoader:
         img_array[:, :, 3] = 255
         return img_array
 
+    def get_normal_texture(self, index: int) -> NDArray:
+        """Get the tile texture at the given index."""
+        tile = self.normal_blob.get_tile(self.normal_idx.get_idx(index))
+        dds_bytestream = tile.decodeTilePayload()
+        square = self.normal_blob.tile_size + 2 * self.normal_blob.border_px
+        img_bytes = texture2ddecoder.decode_bc5(dds_bytestream, square, square)
+        img = Image.frombytes("RGBA", (square, square), img_bytes, "raw", ("BGRA"))
+        img_array = np.asarray(img, copy=True)
+        img_array[:, :, 3] = 255
+        return img_array
+
+    def get_height_texture(self, index: int) -> NDArray:
+        """Get the tile texture at the given index."""
+        tile = self.height_blob.get_tile(self.height_idx.get_idx(index))
+        dds_bytestream = tile.decodeTilePayload()
+        square = self.height_blob.tile_size + 2 * self.height_blob.border_px
+        img = Image.frombytes("I;16L", (square, square), dds_bytestream, "raw")
+        img_array = np.asarray(img, copy=True)
+        return img_array
+
 
 def main():
     earth_folder = Path(
         r"C:\Users\rweld\Documents\Kerbal Space Program 1\KSP Mirage Beta\GameData\Sol-Textures\PluginData\03_Earth-System\03_Earth\Terrain"
     )
-    level = 0
+    mirage = MirageTextureLoader(earth_folder, 0)
 
-    idx_file = earth_folder / Path(f"Level_{level}/canonical.color.L{level}.idx")
-    blob_file = earth_folder / Path(f"Level_{level}/canonical.color.L{level}.bin")
-    idx_info = IndexFile(idx_file)
     print("Index Blob")
-    print(idx_info)
+    print(mirage.height_idx)
     print("-------")
-    blobby = BlobFile(blob_file)
     print("Binary Blob")
-    print(blobby)
+    print(mirage.height_blob)
     print("-------")
 
-    for i in range(idx_info.num_entries):
-        idx = idx_info.get_idx(i)
-        prime_blob = blobby.get_tile(idx)
-        print(prime_blob)
-        dds_bytestream = prime_blob.decodeTilePayload()
-
-        square = blobby.tile_size + 2 * blobby.border_px
-        img_bytes = texture2ddecoder.decode_bc7(dds_bytestream, square, square)
-        img = Image.frombytes("RGBA", (square, square), img_bytes, "raw", ("BGRA"))
-        img_array = np.asarray(img, copy=True)
-        print(img_array.shape)
-        img_array[:, :, 3] = 255
-        plt.imshow(img_array)
+    for i in range(mirage.height_idx.num_entries):
+        img_array = mirage.get_texture(i, "height")
+        print(f"Array is {img_array.shape}")
+        print(f"Min is {np.min(img_array)}, Max is {np.max(img_array)}")
+        print(img_array)
+        plt.imshow(img_array, cmap="gray", vmin=0, vmax=65535)
         plt.show()
 
 
